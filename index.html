@@ -511,20 +511,22 @@ VIEWS.estoque = async () => {
 // ======================================================================= MAIS (cadastros)
 const ENT = {
   Contas: { titulo: 'Contas e cartões', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'select', ['conta', 'cartao', 'dinheiro']], ['limite', 'Limite (R$)', 'number'], ['saldo_inicial', 'Saldo inicial', 'number'], ['dia_fechamento', 'Dia de fechamento (cartão)', 'number'], ['dia_vencimento', 'Dia de vencimento (cartão)', 'number'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']]], sub: (r) => r.tipo + (r.limite ? ' · limite ' + brl(r.limite) : '') },
-  Categorias: { titulo: 'Categorias e orçamento', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'select', ['Despesa', 'Receita']], ['orcamento_mensal', 'Orçamento mensal (R$)', 'number'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']]], sub: (r) => r.tipo + (r.orcamento_mensal ? ' · ' + brl(r.orcamento_mensal) : '') },
+  Categorias: { titulo: 'Categorias e orçamento', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'select', ['Despesa', 'Receita']], ['orcamento_mensal', 'Orçamento mensal (R$)', 'number'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']]], sub: (r) => r.tipo + (r.orcamento_mensal ? ' · ' + brl(r.orcamento_mensal) : '') + (r.catalogo_id ? ' · padrão' : ' · própria') },
   Recorrencias: { titulo: 'Contas fixas e receitas recorrentes', campos: [['nome', 'Nome'], ['direcao', 'Direção', 'select', ['Pagar', 'Receber']], ['categoria_id', 'Categoria', 'cat'], ['valor', 'Valor (R$)', 'number'], ['dia', 'Dia do mês', 'number'], ['conta_id', 'Conta', 'conta'], ['inicio', 'Início', 'date'], ['fim', 'Fim', 'date'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']]], sub: (r) => r.direcao + ' dia ' + r.dia + ' · ' + brl(r.valor) },
   Dividas: { titulo: 'Dívidas', campos: [['credor', 'Credor'], ['tipo', 'Tipo'], ['saldo', 'Saldo (R$)', 'number'], ['taxa_am', 'Taxa % a.m.', 'number'], ['parcela_valor', 'Parcela (R$)', 'number'], ['prazo_restante', 'Parcelas restantes', 'number'], ['vencimento', 'Vencimento', 'date'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']], ['obs', 'Observação']], sub: (r) => brl(r.saldo) + (r.vencimento ? ' · vence ' + dBR(r.vencimento) : '') },
   Usuarios: { titulo: 'Usuários e acesso', campos: [['email', 'E-mail (Google)'], ['nome', 'Nome'], ['papel', 'Papel', 'select', ['editor', 'leitura', 'admin']], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']]], sub: (r) => r.papel + (r.ativo === 'NAO' ? ' · inativo' : '') },
   Lojas: { titulo: 'Lojas', campos: [['nome', 'Nome'], ['cnpj', 'CNPJ (só números)'], ['cidade', 'Cidade'], ['obs', 'Observação']], sub: (r) => (r.cnpj || '') },
-  Produtos: { titulo: 'Produtos', campos: [['nome', 'Nome'], ['marca', 'Marca'], ['categoria_id', 'Categoria', 'cat'], ['unidade_base', 'Unidade-base', 'select', ['kg', 'L', 'un', 'pct']], ['ean', 'Código de barras'], ['duracao_dias', 'Duração de uma compra típica (dias)', 'number'], ['preco_ref', 'Preço de referência (por unidade-base)', 'number'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']], ['obs', 'Observação']], sub: (r) => r.unidade_base }
+  Produtos: { titulo: 'Produtos', campos: [['nome', 'Nome'], ['marca', 'Marca'], ['categoria_id', 'Categoria', 'cat'], ['unidade_base', 'Unidade-base', 'unidade'], ['ean', 'Código de barras'], ['duracao_dias', 'Duração de uma compra típica (dias)', 'number'], ['preco_ref', 'Preço de referência (por unidade-base)', 'number'], ['ativo', 'Ativo', 'select', ['SIM', 'NAO']], ['obs', 'Observação']], sub: (r) => r.unidade_base }
 };
 VIEWS.mais = async () => '<div class="topbar"><h1>Mais</h1></div><div class="grid g3">' + Object.keys(ENT).filter((k) => k !== 'Usuarios' || ehAdmin()).map((k) => '<div class="card item" data-ent="' + k + '" style="display:block"><b>' + ENT[k].titulo + '</b></div>').join('') +
   (ehAdmin() ? '<div class="card item" id="m-share" style="display:block"><b>Compartilhar este espaço</b><div class="s muted">Convide outra pessoa para lançar junto</div></div>' : '') +
-  '<div class="card item" id="m-espacos" style="display:block"><b>Meus espaços</b><div class="s muted">Trocar, criar ou entrar com código</div></div>' +
+  '<div class="card item" id="m-espacos" style="display:block"><b>Meus espaços</b><div class="s muted">Trocar, criar ou sair de um espaço</div></div>' +
+  (S.boot && S.boot.me && S.boot.me.plataforma_admin ? '<div class="card item" id="m-plat" style="display:block"><b>Administração da plataforma</b><div class="s muted">Usuários, cadastro aberto/fechado (sem acesso às finanças de ninguém)</div></div>' : '') +
   '<div class="card item" id="m-ajuda" style="display:block"><b>Como usar / ajuda</b></div></div>';
 AFTER.mais = () => {
   const sh = $('#m-share'); if (sh) sh.onclick = () => abrirConvite();
   $('#m-espacos').onclick = () => abrirEspacos();
+  const pl = $('#m-plat'); if (pl) pl.onclick = () => abrirAdminPlataforma();
   bind('[data-ent]', 'click', (el) => abrirLista(el.dataset.ent));
   $('#m-ajuda').onclick = () => modal('<header><h2>Ajuda rápida</h2><button class="btn sm" data-close>✕</button></header><ul><li><b>+</b> lança despesa, receita ou transferência (pagar fatura = transferência do banco para o cartão).</li><li><b>Contas</b>: agenda do que vence; "Gerar contas do mês" cria as fixas.</li><li><b>Compras</b>: leia o QR da nota; os preços vão para o histórico.</li><li><b>Preços</b>: veja a variação mês a mês de cada item.</li><li>Planilha = banco de dados: você pode corrigir qualquer linha direto nela.</li></ul>');
 };
@@ -549,6 +551,7 @@ function crudModal(entity, obj, done, aviso) {
     if (tipo === 'select') inp = '<select data-k="' + k + '">' + optsHtml(op, v || op[0]) + '</select>';
     else if (tipo === 'cat') inp = '<select data-k="' + k + '">' + optsHtml(S.boot.categorias, v, 'id', 'nome', '—') + '</select>';
     else if (tipo === 'conta') inp = '<select data-k="' + k + '">' + optsHtml(S.boot.contas, v, 'id', 'nome', '—') + '</select>';
+    else if (tipo === 'unidade') inp = '<select data-k="' + k + '">' + optsHtml(S.boot.unidades || [], v || 'un', 'codigo', 'nome') + '</select>';
     else if (tipo === 'date') inp = '<input type="date" data-k="' + k + '" value="' + esc(v) + '">';
     else if (tipo === 'number') inp = '<input data-k="' + k + '" inputmode="decimal" value="' + esc(String(v).replace('.', ',')) + '">';
     else inp = '<input data-k="' + k + '" value="' + esc(v) + '">';
@@ -648,6 +651,19 @@ function abrirConvite() {
     const em = $('#c-email', m.el).value; await api('ws.convidar', { email: em, nome: $('#c-nome', m.el).value, papel: $('#c-papel', m.el).value, _rid: m.rid });
     toast('Convidado(a): ' + em + '. Peça para abrir o app e entrar com este e-mail.'); $('#c-email', m.el).value = ''; $('#c-nome', m.el).value = ''; pessoas();
   });
+}
+
+function abrirAdminPlataforma() {
+  const m = modal('<header><h2>Administração da plataforma</h2><button class="btn sm" data-close>✕</button></header><div id="ad-corpo"><div class="empty">Carregando…</div></div>', { wide: true });
+  const desenha = () => run(async () => {
+    const d = await api('admin.painel');
+    $('#ad-corpo', m.el).innerHTML = '<div class="card" style="margin-bottom:12px"><h3>Cadastro</h3><p class="muted">' + (d.cadastro_aberto ? 'Aberto: qualquer pessoa pode pedir código e criar a própria conta.' : 'Fechado: só quem foi convidado para algum espaço recebe código.') + '</p><button class="btn" id="ad-toggle">' + (d.cadastro_aberto ? 'Fechar cadastro' : 'Abrir cadastro') + '</button></div>' +
+      '<h3 style="margin:8px 0 4px">Usuários (' + d.usuarios.length + ') · ' + d.total_espacos + ' espaço(s)</h3><div class="list">' + d.usuarios.map((u) => '<div class="item" style="cursor:default"><div class="t"><b>' + esc(u.nome || u.email) + '</b><div class="s">' + esc(u.email) + ' · ' + u.n_espacos + ' espaço(s) · ' + esc(u.papel_plataforma) + '</div></div>' +
+      (u.email === S.email ? '<span class="chip">você</span>' : '<button class="btn sm" data-pp="' + esc(u.email) + '" data-novo="' + (u.papel_plataforma === 'admin' ? 'usuario' : 'admin') + '">' + (u.papel_plataforma === 'admin' ? 'Tirar admin' : 'Tornar admin') + '</button>') + '</div>').join('') + '</div>';
+    $('#ad-toggle', m.el).onclick = () => run(async () => { await api('admin.cadastro', { aberto: !d.cadastro_aberto }); desenha(); });
+    bind('[data-pp]', 'click', (el) => { if (confirm('Alterar o papel de plataforma de ' + el.dataset.pp + '?')) run(async () => { await api('admin.papel', { email: el.dataset.pp, papel: el.dataset.novo }); desenha(); }); }, m.el);
+  });
+  desenha();
 }
 
 // ---------- início ----------

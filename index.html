@@ -197,7 +197,7 @@ const VIEWS = {};
 const AFTER = {};
 
 VIEWS.inicio = async () => {
-  const d = await api('dashboard', { mes: S.mes }); S.dash = d;
+  const d = S.preDash || await api('dashboard', { mes: S.mes }); S.preDash = null; S.dash = d;
   const lim = d.limite;
   const limHtml = lim ? '<div class="card"><h3>Limite da ' + esc(lim.conta) + '</h3><div class="big num">' + brl(lim.usado) + ' <span class="muted" style="font-size:14px">de ' + brl(lim.limite) + '</span></div>' +
     '<div class="bar ' + (lim.acima_alerta ? 'bad' : lim.pct > 75 ? 'warn' : '') + '"><i style="width:' + Math.min(100, lim.pct) + '%"></i></div>' +
@@ -652,6 +652,17 @@ function abrirConvite() {
 
 // ---------- início ----------
 async function iniciar() {
+  const ws = lembrar('fin_ws');
+  if (ws) {                                    // caminho rápido: pede tudo AO MESMO TEMPO (1 só ida e volta ao servidor)
+    S.ws = ws;
+    const [l, b, d] = await Promise.allSettled([api('ws.listar'), api('bootstrap'), api('dashboard')]);
+    const login = [l, b, d].find((x) => x.status === 'rejected' && x.reason && x.reason.codigo === 'LOGIN');
+    if (login) throw login.reason;
+    if (l.status === 'fulfilled' && b.status === 'fulfilled' && d.status === 'fulfilled' && l.value.espacos.some((e) => e.id === ws)) {
+      S.espacos = l.value.espacos; S.email = l.value.email; S.boot = b.value; S.mes = b.value.hoje.substr(0, 7); S.preDash = d.value; S.view = 'inicio';
+      $('#fab').style.display = podeEditar() ? '' : 'none'; renderNav(); await render(); return;
+    }
+  }
   await recarregarListaEspacos();
   if (!S.espacos.length) return onboarding();
   if (!S.ws) { $('#nav').innerHTML = '<div class="brand">💚 Finanças</div>'; $('#main').innerHTML = '<div class="empty">Escolha um espaço.</div>'; return abrirEspacos(); }

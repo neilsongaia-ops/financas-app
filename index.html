@@ -2193,19 +2193,6 @@ function abrirCompra(id) {
 let _jsqr = null;
 const carregarJsQR = () => _jsqr || (_jsqr = new Promise((res) => { if (window.jsQR) return res(); const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js'; s.onload = res; s.onerror = res; document.head.appendChild(s); }));
 
-let _pdfjs = null;
-const carregarPdfJs = () => _pdfjs || (_pdfjs = new Promise((res, rej) => {
-  if (window.pdfjsLib) return res();
-  const s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-  s.onload = () => {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-    res();
-  };
-  s.onerror = rej;
-  document.head.appendChild(s);
-}));
-
 async function detectarEmImagem(img, formatos) {
   const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, k = Math.min(1, 1600 / Math.max(w, h));
   const cv = document.createElement('canvas'); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
@@ -2268,12 +2255,11 @@ function lerNota(payload, chave) {
 function abrirPreviaNota(p) {
   const itens = (p.itens && p.itens.length ? p.itens : [{}]).map((i) => Object.assign({ _k: uuid().replace(/-/g, '').substr(0, 10) }, i));
   const lojaIni = p.loja ? p.loja.id : '';
-  const linkNota = p.link_nota || (p.chave ? 'https://www.nfce.fazenda.gov.br/QRCode?p=' + encodeURIComponent(p.chave) : '');
   const m = modal({ titulo: 'Conferir compra', tamanho: 'wide',
     corpo: (p.duplicada ? alerta({ tipo: 'danger', titulo: 'Nota já importada', texto: 'Importada em ' + p.importada_em + '.' }) : '') + (p.avisos || []).map((a) => alerta({ tipo: 'warning', texto: a })).join('') +
       '<div class="form-grid">' + campo({ tipo: 'seletor', id: 'pn-loja', rotulo: 'Loja' }) + campo({ id: 'pn-lojanome', rotulo: 'Nome da nova loja', valor: p.emitente || '', placeholder: 'Ex.: Atacadão', wrap: 'w-lojanome', oculto: !!lojaIni }) +
       campo({ tipo: 'data', id: 'pn-data', rotulo: 'Data', valor: p.data || (p.mes_da_chave ? p.mes_da_chave + '-01' : hojeISO()) }) + campo({ tipo: 'seletor', id: 'pn-conta', rotulo: 'Pago com' }) + '</div>' +
-      '<section class="section"><div class="section__head"><h3>Itens <span class="badge" id="pn-n"></span></h3><div class="cluster">' + (linkNota ? '<a href="' + linkNota + '" target="_blank" class="btn btn--secondary btn--sm">' + ico('link') + '<span>Abrir Nota</span></a>' : '') + '<label class="btn btn--ghost btn--sm">' + ico('file') + '<span>Enviar PDF</span><input type="file" accept="application/pdf" id="pn-file" hidden></label>' + btn({ rotulo: 'Colar texto da nota', icone: 'paste', variante: 'ghost', tam: 'sm', attrs: 'data-pn-colar' }) + btn({ rotulo: 'Item', icone: 'plus', variante: 'secondary', tam: 'sm', attrs: 'data-pn-add' }) + '</div></div><div class="stack stack--sm" id="pn-itens"></div></section>',
+      '<section class="section"><div class="section__head"><h3>Itens <span class="badge" id="pn-n"></span></h3><div class="cluster">' + (p.link_nota ? '<a href="' + esc(p.link_nota) + '" target="_blank" rel="noopener" class="btn btn--secondary btn--sm">' + ico('link') + '<span>Abrir nota</span></a>' : '') + btn({ rotulo: 'Colar texto da nota', icone: 'paste', variante: 'ghost', tam: 'sm', attrs: 'data-pn-colar' }) + btn({ rotulo: 'Item', icone: 'plus', variante: 'secondary', tam: 'sm', attrs: 'data-pn-add' }) + '</div></div><div class="stack stack--sm" id="pn-itens"></div></section>',
     rodape: '<div class="stat grow"><span class="stat__label">Total</span><span class="stat__value" id="pn-total">—</span></div><button type="button" class="btn btn--primary needs-edit" data-pn-ok>Registrar compra</button>' });
   const el = m.el, host = $('#pn-itens', el);
   const sLoja = seletor(el, '#pn-loja', { opcoes: opcoesLojas(), valor: lojaIni, rotulo: 'Loja', placeholder: p.cnpj ? 'Nova loja (CNPJ ' + p.cnpj + ')' : 'Nova loja', acao: { rotulo: 'Nova loja', fn: (q, s) => { s.definir(''); } }, aoMudar: (v) => { $('#w-lojanome', el).hidden = !!v; } });
@@ -2292,32 +2278,6 @@ function abrirPreviaNota(p) {
   host.addEventListener('input', soma);
   host.addEventListener('click', (e) => { const r = e.target.closest('[data-pn-rm]'); if (!r) return; ler(); const i = itens.findIndex((x) => x._k === r.dataset.pnRm); itens.splice(i, 1); if (!itens.length) itens.push({ _k: uuid().substr(0, 8) }); desenhar(); });
   $('[data-pn-add]', el).onclick = () => { ler(); const it = { _k: uuid().replace(/-/g, '').substr(0, 10) }; itens.push(it); desenhar(); const d = $('#pn-d-' + it._k, host); if (d) d.focus(); };
-  const inputPdf = $('#pn-file', el);
-  if (inputPdf) {
-    inputPdf.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const mLoad = modal({ titulo: 'Lendo PDF', tamanho: 'sm', corpo: '<div class="state state--sm"><span class="spinner spinner--lg" aria-hidden="true"></span><p class="state__text">Processando arquivo PDF…</p></div>' });
-      try {
-        await carregarPdfJs();
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
-        let fullText = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          fullText += textContent.items.map(item => item.str).join(' ') + '\n';
-        }
-        mLoad.close();
-        m.close();
-        lerNota({ entrada: p.chave || fullText, texto: fullText }, p.chave);
-      } catch (err) {
-        mLoad.close();
-        toast('Erro ao ler PDF da nota.', { tipo: 'danger' });
-        console.error(err);
-      }
-    };
-  }
   $('[data-pn-colar]', el).onclick = () => {
     const mc = modal({ titulo: 'Colar texto da nota', corpo: campo({ tipo: 'area', id: 'pc-t', rotulo: 'Texto copiado da página da nota', attrs: 'rows="8"' }), rodape: '<button type="button" class="btn btn--primary" data-pc-ok>Ler texto</button>' });
     $('[data-pc-ok]', mc.el).onclick = () => { const t = val(mc.el, '#pc-t'); if (!erroCampo(mc.el, 'pc-t', t.trim() ? '' : 'Cole o texto')) return; mc.close(); m.close(); lerNota({ entrada: p.chave || t, texto: t }, p.chave); };

@@ -2114,7 +2114,7 @@ TELAS.mais = {
     main.innerHTML = cabeca('Mais') +
       '<section class="card"><div class="cluster">' + avatar(me.nome || me.email) + '<div class="grow"><p class="row__title">' + esc(me.nome || me.email || '') + '</p><p class="t-sm t-muted ellipsis">' + esc(me.email || '') + '</p></div>' + badge(me.papel === 'admin' ? 'Admin' : me.papel === 'leitura' ? 'Leitura' : 'Editor', 'primary') + '</div></section>' +
       sec('Ir para', NAV.filter((n) => !n.cel).map((n) => '<a class="row row--button" role="listitem" href="#' + n.v + '">' + lead(n.i) + '<span class="row__main"><span class="row__title">' + n.r + '</span></span>' + ico('chevRight') + '</a>').join(''), 'so-celular') +
-      sec('Cadastros', Object.keys(ENT).filter((k) => k !== 'Usuarios').map((k) => linha('data-acao="cad-abrir" data-ent="' + k + '"', ENT_ICONE[k], ENT[k].titulo)).join('') + linha('data-acao="verbas"', 'wallet', 'Verbas', 'Quanto você separou para cada tipo de gasto')) +
+      sec('Cadastros', Object.keys(ENT).filter((k) => k !== 'Usuarios').map((k) => linha('data-acao="cad-abrir" data-ent="' + k + '"', ENT_ICONE[k], ENT[k].titulo)).join('') + linha('data-acao="verbas"', 'wallet', 'Verbas')) +
       sec('Espaço', '<div class="needs-admin">' + linha('data-acao="convite"', 'userPlus', 'Pessoas e convites') + '<div class="row" role="listitem">' + interruptor({ id: 'm-comp', rotulo: 'Compartilhar meus preços', meta: 'Só o preço, a loja e a data', on: !(S.boot.config && S.boot.config.compartilhar_precos === false) }) + '</div></div>' + linha('data-acao="contribuicao"', 'chart', 'Minha contribuição') + linha('data-acao="espacos"', 'space', 'Meus espaços', S.boot.espaco ? S.boot.espaco.nome : '')) +
       '<section class="section"><h2 class="t-sm t-muted">Aparência</h2><div class="card">' + segmentado('m-tema', [{ v: 'light', rotulo: 'Claro', icone: 'sun' }, { v: 'dark', rotulo: 'Escuro', icone: 'moon' }, { v: 'auto', rotulo: 'Automático', icone: 'auto' }], Tema.pref(), 'Tema') + '</div></section>' +
       '<div class="needs-plataforma">' + sec('Plataforma', linha('data-acao="admin-plataforma"', 'shield', 'Administração da plataforma')) + '</div>' +
@@ -2168,7 +2168,7 @@ function abrirLancamento(l, defaults) {
   const mostraVerba = () => { $('#w-verba', el).hidden = !(tipo === 'Saída' && verbasOk.length); };
   verbasLista().then((vs) => {
     verbasOk = vs.filter((x) => verbaViva(x) || x.id === l.verba_id);
-    sVerba.opcoes = [{ valor: '', rotulo: 'Automática', meta: 'Pela categoria e pela data' }, { valor: '-', rotulo: 'Nenhuma' }].concat(verbasOk.map((x) => ({ valor: x.id, rotulo: x.nome, meta: restanteVerba(x) })));
+    sVerba.opcoes = [{ valor: '', rotulo: 'Automática' }, { valor: '-', rotulo: 'Nenhuma' }].concat(verbasOk.map((x) => ({ valor: x.id, rotulo: x.nome, meta: restanteVerba(x) })));
     mostraVerba();
   }).catch(() => { /* sem verbas: o campo fica escondido */ });
   const ajusta = () => {
@@ -2220,8 +2220,7 @@ function abrirVerbas() {
   const m = modal({ titulo: 'Verbas', flush: true, corpo: Esq.lista(4).replace('card card--flush', ''), rodape: '<button type="button" class="btn btn--primary needs-edit" data-vb-new>' + ico('plus') + '<span>Nova verba</span></button>', aoFechar: () => { S.verbas = null; if (S.view === 'inicio') refresh(); } });
   const desenha = () => run(async () => {
     const vs = await verbasLista(true);
-    m.corpo('<div class="stack stack--sm" style="padding:var(--space-4)">' + alerta({ tipo: 'info', texto: 'Verba é um valor que você separa para um tipo de gasto. Cada compra que se encaixa desconta da verba e você vê quanto ainda sobra. Não é conta a pagar.' }) + '</div>' +
-      (vs.length ? '<div class="list" role="list" id="vb-l">' + vs.map(rowVerba).join('') + '</div>' : estadoHtml({ icone: 'wallet', titulo: 'Nenhuma verba', texto: 'Exemplo: "Compras do mês", R$ 700, categorias Alimentação e Higiene.', compacto: true })));
+    m.corpo(vs.length ? '<div class="list" role="list" id="vb-l">' + vs.map(rowVerba).join('') + '</div>' : estadoHtml({ icone: 'wallet', titulo: 'Nenhuma verba', compacto: true }));
     const l = $('#vb-l', m.el); if (l) l.onclick = (e) => { const r = e.target.closest('[data-id]'); if (r) abrirVerbaDetalhe(r.dataset.id, desenha); };
   }, () => desenha());
   $('[data-vb-new]', m.el).onclick = () => abrirVerbaForm(null, desenha);
@@ -2232,7 +2231,7 @@ function abrirVerbaDetalhe(id, done) {
   const abre = () => run(async () => {
     const v = await api('verba.detalhe', { id });
     m.corpo('<div class="stack">' + meterVerba(v) + '<p class="t-sm t-muted">' + esc(periodoVerba(v)) + ' · ' + v.categorias.map((c) => (catPorId(c) || {}).nome).filter(Boolean).map(esc).join(', ') + (v.conta_id ? ' · só ' + esc(contaNome(v.conta_id)) : '') + '</p>' +
-      divisor('Gastos nesta verba') + (v.lancamentos.length ? '<div class="list" role="list">' + v.lancamentos.map(rowLanc).join('') + '</div>' : estadoHtml({ icone: 'lanc', titulo: 'Nenhum gasto ainda', texto: 'Compras nas categorias da verba entram aqui sozinhas.', compacto: true })) + '</div>');
+      divisor('Gastos nesta verba') + (v.lancamentos.length ? '<div class="list" role="list">' + v.lancamentos.map(rowLanc).join('') + '</div>' : estadoHtml({ icone: 'lanc', titulo: 'Nenhum gasto ainda', compacto: true })) + '</div>');
     $('[data-vd-ed]', m.el).onclick = () => { m.close(); abrirVerbaForm(v, done); };
     $('[data-vd-rec]', m.el).onclick = () => run(async () => { const r = await api('verba.recalcular', { id }); toast(r.vinculados ? r.vinculados + ' gasto(s) vinculado(s)' : 'Nenhum gasto novo para vincular'); invalidar(); abre(); if (done) done(); });
   });
@@ -2244,10 +2243,10 @@ function abrirVerbaForm(v, done) {
     corpo: campo({ id: 'vf-nome', rotulo: 'Nome', valor: v.nome || '', placeholder: 'Ex.: Compras do mês', attrs: 'autocomplete="off"', cheio: true }) +
       '<div class="form-grid">' + campo({ tipo: 'moeda', id: 'vf-valor', rotulo: 'Valor separado', valor: v.valor || '' }) + campo({ tipo: 'seletor', id: 'vf-cats', rotulo: 'Categorias' }) + campo({ tipo: 'seletor', id: 'vf-conta', rotulo: 'Conta ou cartão (opcional)' }) +
       campo({ id: 'vf-alerta', rotulo: 'Avisar a partir de (%)', valor: v.alerta_pct || 80, inputmode: 'numeric' }) + '</div>' +
-      interruptor({ id: 'vf-mensal', rotulo: 'Todo mês', meta: 'Recomeça a cada mês', on: novo ? true : v.repete === 'MENSAL' }) +
+      interruptor({ id: 'vf-mensal', rotulo: 'Todo mês', on: novo ? true : v.repete === 'MENSAL' }) +
       '<div class="form-grid" id="vf-per">' + campo({ tipo: 'data', id: 'vf-ini', rotulo: 'Início', valor: v.inicio || hojeISO(), atalhos: false }) + campo({ tipo: 'data', id: 'vf-fim', rotulo: 'Até', valor: v.fim || '', atalhos: false }) + '</div>' +
       (novo ? '' : interruptor({ id: 'vf-ativa', rotulo: 'Ativa', on: v.ativa !== 'NAO' })) +
-      interruptor({ id: 'vf-incl', rotulo: 'Incluir gastos já lançados neste período', meta: 'Você pode trocar o vínculo em cada lançamento', on: novo }),
+      interruptor({ id: 'vf-incl', rotulo: 'Incluir gastos já lançados neste período', on: novo }),
     rodape: (novo ? '' : btn({ rotulo: 'Excluir', icone: 'trash', variante: 'danger-ghost', so: true, editar: true, attrs: 'data-vf-del' })) + '<button type="button" class="btn btn--primary needs-edit" data-vf-ok>Salvar</button>' });
   const el = m.el;
   const sCats = seletor(el, '#vf-cats', { opcoes: opcoesCategorias('Despesa'), valor: v.categorias || [], multi: true, rotulo: 'Categorias', placeholder: 'Escolher categorias' });

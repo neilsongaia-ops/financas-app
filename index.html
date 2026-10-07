@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>Finanças</title>
+  <meta name="theme-color" content="#3559c3">
   <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyQPTsc4Uy5WnHUy2whf_dra87FFHaDQalRuiTXPY8JKNHytdpqdad9uoVFnulR8Vh9Ew/exec";</script>
   <script>
-<script>
 /* Tema: claro, escuro ou automático (segue o sistema). Roda no <head> para não piscar. Preferência em localStorage 'fin_tema'. */
 (function () {
   var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -26,12 +26,10 @@
 })();
 </script>
 
-</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
   <style>
-<style>
 /* =============================================================================
    Finanças — design system único.
    1) Tokens (:root e [data-theme="dark"]): toda cor, medida, raio, sombra, tempo e camada.
@@ -734,7 +732,6 @@ a.row:hover{ color: inherit; }
 .doc__split{ display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
 </style>
 
-</style>
 </head>
 <body>
   <div class="app" id="app" data-nav="aberta">
@@ -755,7 +752,6 @@ a.row:hover{ color: inherit; }
   <button class="fab needs-edit" id="fab" aria-label="Novo lançamento" hidden><svg class="ico ico--lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
   <div id="modal-root"></div>
   <script>
-<script>
 /* Finanças — interface (JavaScript puro, sem build). Ponte única com o servidor: api(action, payload). */
 'use strict';
 // Ícones: Lucide 0.469.0 (ISC). Um único conjunto linear; herdam currentColor.
@@ -2784,7 +2780,5 @@ if (!window.FIN_DOC) iniciarApp();
 
 </script>
 
-</script>
 </body>
 </html>
-

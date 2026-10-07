@@ -1681,7 +1681,7 @@ async function render() {
   }
 }
 const refresh = () => render();
-const invalidar = () => { S.cacheDash = {}; S.cacheLanc = {}; };
+const invalidar = () => { S.cacheDash = {}; S.cacheLanc = {}; S.verbas = null; };
 async function refreshBoot() { S.boot = await api('bootstrap'); aplicarPapel(); }
 
 // ---------- ações por delegação: [data-acao="nome"] → ACOES.nome(el, evento)
@@ -1812,10 +1812,11 @@ function detalhesInicio(d) {
   const meter = (o) => { const cat = S.boot.categorias.find((c) => c.nome === o.categoria); return '<div class="meter"><div class="meter__head"><span class="meter__label">' + leadCat(cat).replace('row__lead row__lead--cat', 'option__icon') + '<span class="ellipsis">' + esc(o.categoria) + '</span></span><span class="meter__value">' + brl(o.realizado) + (o.orcamento ? ' de ' + brl(o.orcamento) : '') + '</span></div>' + (o.orcamento ? progresso(o.pct, tipoPct(o.pct, 85, 100), o.categoria) : '') + '</div>'; };
   const contas = d.contas.map((c) => '<div class="row row--plain" role="listitem">' + lead(icoConta(c)) + '<div class="row__main"><span class="row__title">' + esc(c.nome) + '</span>' + (c.limite ? '<span class="row__meta"><span>Limite usado ' + c.limite.pct + '%</span></span>' : '') + '</div><div class="row__trail"><span class="row__amount num' + (c.saldo < 0 ? ' t-neg' : '') + '">' + brl(c.saldo) + '</span></div></div>').join('');
   const cartoes = d.cartoes.map((c) => { const f = c.faturas[0]; return '<div class="row row--plain" role="listitem">' + lead('card') + '<div class="row__main"><span class="row__title">' + esc(c.nome) + '</span><span class="row__meta">' + (f ? metaSpans(['Vence ' + dBR(f.vence), f.status === 'Vencida' ? badge('Vencida', 'danger') : esc(f.status)]) : '<span>Sem fatura em aberto</span>') + '</span></div><div class="row__trail"><span class="row__amount num">' + brl(c.deve) + '</span>' + (c.deve > 0 ? btn({ rotulo: 'Pagar fatura', variante: 'ghost', tam: 'sm', editar: true, attrs: 'data-acao="fatura-pagar" data-id="' + esc(c.id) + '"' }) : '') + '</div></div>'; }).join('');
-  const lim = d.limite;
+  const lim = d.limite, vivas = (d.verbas || []).filter(verbaViva);
   const alertasN = d.estoque.length + d.alertas_preco.length + (d.alertas_compartilhados || []).length;
   return '<div class="stack stack--sm">' +
     '<details class="disclosure">' + sum('Orçamento por categoria', 'chart', acima ? badge(acima + ' acima', 'danger') : '') + '<div class="disclosure__body">' + (orc.length ? orc.map(meter).join('') : estadoHtml({ icone: 'chart', titulo: 'Sem orçamento', compacto: true, acao: { rotulo: 'Definir orçamento', variante: 'secondary', editar: true, attrs: 'data-acao="cad-abrir" data-ent="Categorias"' } })) + '</div></details>' +
+    (vivas.length ? '<details class="disclosure"' + (vivas.some((v) => v.estado !== 'ok') ? ' open' : '') + '>' + sum('Verbas', 'wallet', vivas.some((v) => v.estado === 'estourada') ? badge('estourada', 'danger') : '') + '<div class="disclosure__body">' + vivas.map(meterVerba).join('') + btn({ rotulo: 'Ver todas', variante: 'secondary', tam: 'sm', attrs: 'data-acao="verbas"' }) + '</div></details>' : '') +
     '<details class="disclosure">' + sum('Contas e cartões', 'bank') + '<div class="disclosure__body"><div class="list" role="list">' + contas + cartoes + '</div></div></details>' +
     '<details class="disclosure">' + sum('Limite e dívidas', 'debt') + '<div class="disclosure__body">' +
       (lim ? '<div class="meter"><div class="meter__head"><span class="meter__label">Limite da ' + esc(lim.conta) + '</span><span class="meter__value">' + brl(lim.usado) + ' de ' + brl(lim.limite) + '</span></div>' + progresso(lim.pct, lim.acima_alerta ? 'danger' : lim.pct > 75 ? 'warning' : '', 'Limite usado') + '<span class="t-sm t-muted">Disponível ' + brl(lim.disponivel) + '</span></div>' : '') +
@@ -2113,7 +2114,7 @@ TELAS.mais = {
     main.innerHTML = cabeca('Mais') +
       '<section class="card"><div class="cluster">' + avatar(me.nome || me.email) + '<div class="grow"><p class="row__title">' + esc(me.nome || me.email || '') + '</p><p class="t-sm t-muted ellipsis">' + esc(me.email || '') + '</p></div>' + badge(me.papel === 'admin' ? 'Admin' : me.papel === 'leitura' ? 'Leitura' : 'Editor', 'primary') + '</div></section>' +
       sec('Ir para', NAV.filter((n) => !n.cel).map((n) => '<a class="row row--button" role="listitem" href="#' + n.v + '">' + lead(n.i) + '<span class="row__main"><span class="row__title">' + n.r + '</span></span>' + ico('chevRight') + '</a>').join(''), 'so-celular') +
-      sec('Cadastros', Object.keys(ENT).filter((k) => k !== 'Usuarios').map((k) => linha('data-acao="cad-abrir" data-ent="' + k + '"', ENT_ICONE[k], ENT[k].titulo)).join('')) +
+      sec('Cadastros', Object.keys(ENT).filter((k) => k !== 'Usuarios').map((k) => linha('data-acao="cad-abrir" data-ent="' + k + '"', ENT_ICONE[k], ENT[k].titulo)).join('') + linha('data-acao="verbas"', 'wallet', 'Verbas', 'Quanto você separou para cada tipo de gasto')) +
       sec('Espaço', '<div class="needs-admin">' + linha('data-acao="convite"', 'userPlus', 'Pessoas e convites') + '<div class="row" role="listitem">' + interruptor({ id: 'm-comp', rotulo: 'Compartilhar meus preços', meta: 'Só o preço, a loja e a data', on: !(S.boot.config && S.boot.config.compartilhar_precos === false) }) + '</div></div>' + linha('data-acao="contribuicao"', 'chart', 'Minha contribuição') + linha('data-acao="espacos"', 'space', 'Meus espaços', S.boot.espaco ? S.boot.espaco.nome : '')) +
       '<section class="section"><h2 class="t-sm t-muted">Aparência</h2><div class="card">' + segmentado('m-tema', [{ v: 'light', rotulo: 'Claro', icone: 'sun' }, { v: 'dark', rotulo: 'Escuro', icone: 'moon' }, { v: 'auto', rotulo: 'Automático', icone: 'auto' }], Tema.pref(), 'Tema') + '</div></section>' +
       '<div class="needs-plataforma">' + sec('Plataforma', linha('data-acao="admin-plataforma"', 'shield', 'Administração da plataforma')) + '</div>' +
@@ -2151,7 +2152,7 @@ function abrirLancamento(l, defaults) {
       '<div class="field">' + moedaHtml('lf-valor', l.valor, { hero: true, rotulo: 'Valor', autofocus: !editando }) + '<span class="field__error" id="lf-valor-err" hidden></span></div>' +
       '<div class="form-grid">' + campo({ tipo: 'seletor', id: 'lf-cat', rotulo: 'Categoria', wrap: 'w-cat' }) + campo({ tipo: 'seletor', id: 'lf-conta', rotulo: 'Conta' }) + campo({ tipo: 'seletor', id: 'lf-dest', rotulo: 'Para', wrap: 'w-dest' }) +
       campo({ id: 'lf-desc', rotulo: 'Descrição', valor: l.descricao || '', placeholder: 'Ex.: Mercado', attrs: 'autocomplete="off" enterkeyhint="done"' }) + campo({ tipo: 'data', id: 'lf-data', rotulo: 'Data', valor: l.data }) +
-      '<div class="field" id="w-parc"><span class="field__label">Parcelas</span>' + passo('id="lf-parc"', 1) + '</div>' + campo({ tipo: 'seletor', id: 'lf-fat', rotulo: 'Fatura', wrap: 'w-fat' }) + '</div>' +
+      '<div class="field" id="w-parc"><span class="field__label">Parcelas</span>' + passo('id="lf-parc"', 1) + '</div>' + campo({ tipo: 'seletor', id: 'lf-fat', rotulo: 'Fatura', wrap: 'w-fat' }) + campo({ tipo: 'seletor', id: 'lf-verba', rotulo: 'Verba', wrap: 'w-verba', oculto: true }) + '</div>' +
       interruptor({ id: 'lf-st', rotulo: 'Realizado', on: l.status !== 'Previsto' }) +
       '<details class="disclosure disclosure--plain"' + (l.obs ? ' open' : '') + '><summary class="disclosure__sum">Observação' + ico('chevDown') + '</summary><div class="disclosure__body">' + campo({ tipo: 'area', id: 'lf-obs', valor: l.obs || '', attrs: 'aria-label="Observação"' }) + '</div></details>',
     rodape: (editando ? btn({ rotulo: 'Excluir', icone: 'trash', variante: 'danger-ghost', so: true, editar: true, attrs: 'data-l-del' }) + btn({ rotulo: 'Duplicar', icone: 'copy', variante: 'secondary', so: true, editar: true, attrs: 'data-l-dup' }) : '') +
@@ -2162,11 +2163,20 @@ function abrirLancamento(l, defaults) {
   const sConta = seletor(el, '#lf-conta', { opcoes: opcoesContas(), valor: l.conta_id || '', rotulo: 'Conta', aoMudar: () => ajusta() });
   const sDest = seletor(el, '#lf-dest', { opcoes: opcoesContas(), valor: l.conta_destino_id || '', rotulo: 'Conta de destino', placeholder: 'Escolher conta' });
   const sFat = seletor(el, '#lf-fat', { opcoes: [], valor: l.fatura_vencimento || '', rotulo: 'Fatura', busca: false });
+  const sVerba = seletor(el, '#lf-verba', { opcoes: [], valor: l.verba_id || '', rotulo: 'Verba', busca: false });
+  let verbasOk = [];
+  const mostraVerba = () => { $('#w-verba', el).hidden = !(tipo === 'Saída' && verbasOk.length); };
+  verbasLista().then((vs) => {
+    verbasOk = vs.filter((x) => verbaViva(x) || x.id === l.verba_id);
+    sVerba.opcoes = [{ valor: '', rotulo: 'Automática', meta: 'Pela categoria e pela data' }, { valor: '-', rotulo: 'Nenhuma' }].concat(verbasOk.map((x) => ({ valor: x.id, rotulo: x.nome, meta: restanteVerba(x) })));
+    mostraVerba();
+  }).catch(() => { /* sem verbas: o campo fica escondido */ });
   const ajusta = () => {
     const tr = tipo === 'Transferência', cartao = contaPorId(sConta.valor) || {};
     sCat.opcoes = opcoesCategorias(tipo === 'Entrada' ? 'Receita' : 'Despesa');
     if (sCat.valor && !sCat.opcao(sCat.valor)) sCat.definir('', true);
     $('#w-cat', el).hidden = tr; $('#w-dest', el).hidden = !tr;
+    mostraVerba();
     $('#lf-conta-lbl', el).textContent = tr ? 'De' : 'Conta';
     const ehCartao = tipo === 'Saída' && cartao.tipo === 'cartao';
     $('#w-parc', el).hidden = !(ehCartao && !editando); $('#w-fat', el).hidden = !ehCartao;
@@ -2185,7 +2195,7 @@ function abrirLancamento(l, defaults) {
     if (!erroCampo(el, 'lf-conta', sConta.valor ? '' : 'Escolha a conta')) return;
     if (tipo === 'Transferência' && !erroCampo(el, 'lf-dest', sDest.valor && sDest.valor !== sConta.valor ? '' : 'Escolha outra conta de destino')) return;
     ocupado(e.currentTarget, async () => {
-      const o = Object.assign({}, l, { tipo, valor, descricao: val(el, '#lf-desc'), categoria_id: tipo === 'Transferência' ? '' : sCat.valor, data: val(el, '#lf-data'), conta_id: sConta.valor, conta_destino_id: tipo === 'Transferência' ? sDest.valor : '', status: $('#lf-st', el).checked ? 'Realizado' : 'Previsto', obs: val(el, '#lf-obs'), parcelas: num($('#lf-parc .stepper__val', el).value), fatura_vencimento: $('#w-fat', el).hidden ? '' : sFat.valor });
+      const o = Object.assign({}, l, { tipo, valor, descricao: val(el, '#lf-desc'), categoria_id: tipo === 'Transferência' ? '' : sCat.valor, data: val(el, '#lf-data'), conta_id: sConta.valor, conta_destino_id: tipo === 'Transferência' ? sDest.valor : '', status: $('#lf-st', el).checked ? 'Realizado' : 'Previsto', obs: val(el, '#lf-obs'), parcelas: num($('#lf-parc .stepper__val', el).value), fatura_vencimento: $('#w-fat', el).hidden ? '' : sFat.valor, verba_id: $('#w-verba', el).hidden ? (l.verba_id || '') : sVerba.valor });
       await api('lancamentos.save', Object.assign(o, { _rid: m.rid }));
       m.close(); toast(editando ? 'Lançamento atualizado' : 'Lançamento salvo'); invalidar(); refresh();
     });
@@ -2196,6 +2206,71 @@ function abrirLancamento(l, defaults) {
   }
 }
 
+// ---------- VERBAS: valor que a pessoa separa para um tipo de gasto; cada compra que se encaixa desconta e o app mostra quanto sobra
+const VERBA_TIPO = { ok: '', atencao: 'warning', estourada: 'danger' };
+async function verbasLista(forca) { if (forca || !S.verbas) S.verbas = await api('verba.listar'); return S.verbas; }
+const periodoVerba = (v) => v.repete === 'MENSAL' ? 'Todo mês' : dBR(v.inicio) + ' a ' + dBR(v.fim);
+const restanteVerba = (v) => v.restante >= 0 ? 'Sobram ' + brl(v.restante) : 'Estourou em ' + brl(-v.restante);
+const verbaViva = (v) => v.ativa !== 'NAO' && !v.encerrada;
+const meterVerba = (v) => '<div class="meter"><div class="meter__head"><span class="meter__label"><span class="ellipsis">' + esc(v.nome) + '</span></span><span class="meter__value">' + brl(v.gasto) + ' de ' + brl(v.valor) + '</span></div>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) +
+  '<span class="t-sm t-muted">' + esc(restanteVerba(v)) + (v.ritmo ? ' · ' + brl(v.ritmo) + ' por dia' : '') + '</span></div>';
+const badgeVerba = (v) => v.ativa === 'NAO' ? badge('Inativa') : v.encerrada ? badge('Encerrada') : v.estado === 'estourada' ? badge('Estourou', 'danger') : v.estado === 'atencao' ? badge('Atenção', 'warning') : '';
+const rowVerba = (v) => '<button type="button" class="row row--button" role="listitem" data-id="' + esc(v.id) + '">' + lead('wallet') + '<span class="row__main"><span class="row__title">' + esc(v.nome) + '</span><span class="row__meta">' + metaSpans([periodoVerba(v), restanteVerba(v)].map(esc)) + '</span>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) + '</span>' + badgeVerba(v) + ico('chevRight') + '</button>';
+function abrirVerbas() {
+  const m = modal({ titulo: 'Verbas', flush: true, corpo: Esq.lista(4).replace('card card--flush', ''), rodape: '<button type="button" class="btn btn--primary needs-edit" data-vb-new>' + ico('plus') + '<span>Nova verba</span></button>', aoFechar: () => { S.verbas = null; if (S.view === 'inicio') refresh(); } });
+  const desenha = () => run(async () => {
+    const vs = await verbasLista(true);
+    m.corpo('<div class="stack stack--sm" style="padding:var(--space-4)">' + alerta({ tipo: 'info', texto: 'Verba é um valor que você separa para um tipo de gasto. Cada compra que se encaixa desconta da verba e você vê quanto ainda sobra. Não é conta a pagar.' }) + '</div>' +
+      (vs.length ? '<div class="list" role="list" id="vb-l">' + vs.map(rowVerba).join('') + '</div>' : estadoHtml({ icone: 'wallet', titulo: 'Nenhuma verba', texto: 'Exemplo: "Compras do mês", R$ 700, categorias Alimentação e Higiene.', compacto: true })));
+    const l = $('#vb-l', m.el); if (l) l.onclick = (e) => { const r = e.target.closest('[data-id]'); if (r) abrirVerbaDetalhe(r.dataset.id, desenha); };
+  }, () => desenha());
+  $('[data-vb-new]', m.el).onclick = () => abrirVerbaForm(null, desenha);
+  desenha();
+}
+function abrirVerbaDetalhe(id, done) {
+  const m = modal({ titulo: 'Verba', corpo: Esq.lista(3), rodape: btn({ rotulo: 'Vincular gastos já lançados', icone: 'link', variante: 'secondary', editar: true, attrs: 'data-vd-rec' }) + btn({ rotulo: 'Editar', icone: 'edit', variante: 'secondary', editar: true, attrs: 'data-vd-ed' }) });
+  const abre = () => run(async () => {
+    const v = await api('verba.detalhe', { id });
+    m.corpo('<div class="stack">' + meterVerba(v) + '<p class="t-sm t-muted">' + esc(periodoVerba(v)) + ' · ' + v.categorias.map((c) => (catPorId(c) || {}).nome).filter(Boolean).map(esc).join(', ') + (v.conta_id ? ' · só ' + esc(contaNome(v.conta_id)) : '') + '</p>' +
+      divisor('Gastos nesta verba') + (v.lancamentos.length ? '<div class="list" role="list">' + v.lancamentos.map(rowLanc).join('') + '</div>' : estadoHtml({ icone: 'lanc', titulo: 'Nenhum gasto ainda', texto: 'Compras nas categorias da verba entram aqui sozinhas.', compacto: true })) + '</div>');
+    $('[data-vd-ed]', m.el).onclick = () => { m.close(); abrirVerbaForm(v, done); };
+    $('[data-vd-rec]', m.el).onclick = () => run(async () => { const r = await api('verba.recalcular', { id }); toast(r.vinculados ? r.vinculados + ' gasto(s) vinculado(s)' : 'Nenhum gasto novo para vincular'); invalidar(); abre(); if (done) done(); });
+  });
+  abre();
+}
+function abrirVerbaForm(v, done) {
+  v = v || {}; const novo = !v.id;
+  const m = modal({ titulo: novo ? 'Nova verba' : 'Editar verba',
+    corpo: campo({ id: 'vf-nome', rotulo: 'Nome', valor: v.nome || '', placeholder: 'Ex.: Compras do mês', attrs: 'autocomplete="off"', cheio: true }) +
+      '<div class="form-grid">' + campo({ tipo: 'moeda', id: 'vf-valor', rotulo: 'Valor separado', valor: v.valor || '' }) + campo({ tipo: 'seletor', id: 'vf-cats', rotulo: 'Categorias' }) + campo({ tipo: 'seletor', id: 'vf-conta', rotulo: 'Conta ou cartão (opcional)' }) +
+      campo({ id: 'vf-alerta', rotulo: 'Avisar a partir de (%)', valor: v.alerta_pct || 80, inputmode: 'numeric' }) + '</div>' +
+      interruptor({ id: 'vf-mensal', rotulo: 'Todo mês', meta: 'Recomeça a cada mês', on: novo ? true : v.repete === 'MENSAL' }) +
+      '<div class="form-grid" id="vf-per">' + campo({ tipo: 'data', id: 'vf-ini', rotulo: 'Início', valor: v.inicio || hojeISO(), atalhos: false }) + campo({ tipo: 'data', id: 'vf-fim', rotulo: 'Até', valor: v.fim || '', atalhos: false }) + '</div>' +
+      (novo ? '' : interruptor({ id: 'vf-ativa', rotulo: 'Ativa', on: v.ativa !== 'NAO' })) +
+      interruptor({ id: 'vf-incl', rotulo: 'Incluir gastos já lançados neste período', meta: 'Você pode trocar o vínculo em cada lançamento', on: novo }),
+    rodape: (novo ? '' : btn({ rotulo: 'Excluir', icone: 'trash', variante: 'danger-ghost', so: true, editar: true, attrs: 'data-vf-del' })) + '<button type="button" class="btn btn--primary needs-edit" data-vf-ok>Salvar</button>' });
+  const el = m.el;
+  const sCats = seletor(el, '#vf-cats', { opcoes: opcoesCategorias('Despesa'), valor: v.categorias || [], multi: true, rotulo: 'Categorias', placeholder: 'Escolher categorias' });
+  const sConta = seletor(el, '#vf-conta', { opcoes: [{ valor: '', rotulo: 'Qualquer conta ou cartão' }].concat(opcoesContas()), valor: v.conta_id || '', rotulo: 'Conta ou cartão', busca: false });
+  const per = () => { $('#vf-per', el).hidden = $('#vf-mensal', el).checked; };
+  $('#vf-mensal', el).onchange = per; per();
+  $('[data-vf-ok]', el).onclick = (e) => {
+    if (!erroCampo(el, 'vf-nome', val(el, '#vf-nome').trim() ? '' : 'Informe o nome')) return;
+    if (!erroCampo(el, 'vf-valor', val(el, '#vf-valor') > 0 ? '' : 'Informe o valor')) return;
+    if (!erroCampo(el, 'vf-cats', sCats.valor.length ? '' : 'Escolha ao menos uma categoria')) return;
+    const mensal = $('#vf-mensal', el).checked;
+    if (!mensal && !erroCampo(el, 'vf-fim', val(el, '#vf-fim') ? '' : 'Informe até quando')) return;
+    ocupado(e.currentTarget, async () => {
+      const r = await api('verba.salvar', Object.assign({}, v, { nome: val(el, '#vf-nome').trim(), valor: val(el, '#vf-valor'), categorias: sCats.valor, conta_id: sConta.valor, alerta_pct: num(val(el, '#vf-alerta')), repete: mensal ? 'MENSAL' : 'NAO', inicio: val(el, '#vf-ini'), fim: mensal ? '' : val(el, '#vf-fim'), ativa: !novo && !$('#vf-ativa', el).checked ? 'NAO' : 'SIM', incluir_passados: $('#vf-incl', el).checked, _rid: m.rid }));
+      m.close(); toast(r.vinculados ? 'Verba salva · ' + r.vinculados + ' gasto(s) vinculado(s)' : 'Verba salva'); invalidar(); if (done) done();
+    });
+  };
+  if (!novo) $('[data-vf-del]', el).onclick = async () => {
+    if (!await confirmar({ titulo: 'Excluir esta verba?', texto: 'Os lançamentos continuam; só deixam de estar ligados à verba.', ok: 'Excluir', perigo: true })) return;
+    run(async () => { await api('verba.excluir', { id: v.id, versao: v.versao }); m.close(); toast('Verba excluída'); invalidar(); if (done) done(); });
+  };
+}
+ACOES.verbas = () => abrirVerbas();
 // ---------- conta da agenda (nova / editar)
 function abrirAgenda(a) {
   a = a || { direcao: 'Pagar', vencimento: hojeISO() };
@@ -2830,8 +2905,15 @@ function demoDb() {
   const cesta = vazio ? [] : [{ produto_id: 'P3', qtd: 2, nome: 'Café' }, { produto_id: 'P5', qtd: 30, nome: 'Ovo' }, { produto_id: 'P1', qtd: 1, nome: 'Arroz' }, { produto_id: 'P10', qtd: 1, nome: 'Banana' }, { produto_id: 'P11', qtd: 2, nome: 'Pão de forma integral com castanhas e grãos' }];
   const estoque = vazio ? [] : [['P5', 'Ovo', 'COMPRAR AGORA', 0, -12, 0], ['P3', 'Café', 'Acaba em breve', 3, -27, 3], ['P4', 'Leite', 'Acaba em breve', 5, -9, 5], ['P1', 'Arroz', 'Ok', 21, -9, 21], ['P8', 'Detergente', 'Ok', 14, -16, 14], ['P6', 'Azeite extravirgem', 'Ok', 40, -20, 40], ['P9', 'Papel higiênico (12 rolos)', 'Acaba em breve', 6, -24, 6], ['P12', 'Sabão em pó', null, null, null, null]].map((e) => ({ produto_id: e[0], nome: e[1], status: e[2] || 'Sem dados', dias: e[3], ultima_compra: e[4] === null ? '' : addDias(hoje, e[4]), acaba_em: e[5] === null ? '' : addDias(hoje, e[5]) }));
   const espacos = DEMO.estado === 'onboarding' ? [] : [{ id: 'demo', nome: 'Minhas finanças', papel: DEMO.estado === 'leitura' ? 'leitura' : 'admin' }, { id: 'casa', nome: 'Casa da família Souza', papel: 'editor' }];
-  DEMO.db = { hoje, mes, contas, categorias, lojas, produtos, lancs, ag, compras, itensCompra, precos, usuarios, recorrencias, dividas, cesta, estoque, espacos, cadastroAberto: false, n: 1000 };
+  const verbas = vazio ? [] : [{ id: 'vb1', nome: 'Compras do mês', valor: 700, repete: 'MENSAL', inicio: mes + '-01', fim: '', conta_id: '', alerta_pct: 80, ativa: 'SIM', categorias: ['k1'], versao: 1 }];
+  DEMO.db = { hoje, mes, verbas, contas, categorias, lojas, produtos, lancs, ag, compras, itensCompra, precos, usuarios, recorrencias, dividas, cesta, estoque, espacos, cadastroAberto: false, n: 1000 };
   return DEMO.db;
+}
+function demoVerba(db, v) {
+  const per = v.repete === 'MENSAL' ? { de: db.mes + '-01', ate: db.mes + '-31' } : { de: v.inicio, ate: v.fim || '9999-12-31' };
+  const ls = db.lancs.filter((l) => l.tipo === 'Saída' && v.categorias.includes(l.categoria_id) && (!v.conta_id || l.conta_id === v.conta_id) && l.data >= per.de && l.data <= per.ate);
+  const gasto = Math.round(ls.reduce((s, l) => s + l.valor, 0) * 100) / 100, restante = Math.round((v.valor - gasto) * 100) / 100, pct = Math.round(gasto / v.valor * 1000) / 10;
+  return Object.assign({}, v, { periodo: per, gasto, restante, pct, qtd: ls.length, estado: pct > 100 ? 'estourada' : pct >= (v.alerta_pct || 80) ? 'atencao' : 'ok', dias: null, ritmo: null, encerrada: false, lancamentos: ls });
 }
 function demoDashboard(db, mes) {
   const ls = db.lancs.filter((l) => l.data.substr(0, 7) === mes), soma = (t) => ls.filter((l) => l.tipo === t).reduce((s, l) => s + l.valor, 0);
@@ -2845,6 +2927,7 @@ function demoDashboard(db, mes) {
     limite: vazio ? null : { conta: 'Conta Santander', usado: 7546.31, limite: 11680, disponivel: 4133.69, pct: 65, alerta: 10500, acima_alerta: false },
     saldo_liquido: vazio ? 0 : -8244.94, mes_totais: { entradas: ent, saidas: sai, resultado: ent - sai },
     agenda: { pagar_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Pagar' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), receber_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Receber' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), atrasados: pend.filter((a) => a.vencimento < hoje).length, proximos: pend.slice().sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6) },
+    verbas: db.verbas.map((v) => demoVerba(db, v)),
     orcamento: db.categorias.filter((c) => c.tipo === 'Despesa').map((c) => { const r = ls.filter((l) => l.categoria_id === c.id && l.tipo === 'Saída').reduce((s, l) => s + l.valor, 0); return { categoria: c.nome, orcamento: c.orcamento_mensal, realizado: Math.round(r * 100) / 100, pct: c.orcamento_mensal ? Math.round(r / c.orcamento_mensal * 100) : 0 }; }),
     dividas: { total_geral: vazio ? 0 : 25000, observacao: 'Soma das dívidas, faturas de cartão e limite usado.' },
     estoque: db.estoque.filter((e) => e.status === 'COMPRAR AGORA' || (e.status === 'Acaba em breve' && e.dias <= 3)), alertas_preco: vazio ? [] : [{ nome: 'Café', pct: 12.5 }, { nome: 'Leite', pct: -4.2 }], alertas_compartilhados: vazio ? [] : [{ produto_id: 'p1', nome: 'Café', loja: 'Atacadão', preco_base: 79.9, seu_ultimo: 89.9, pct: -11.1, idade_dias: 1 }],
@@ -2855,7 +2938,7 @@ function demoApi(action, p) {
   const db = demoDb(), est = DEMO.estado, falha = (error, codigo) => ({ ok: false, error, codigo: codigo || '' }), ok = (data) => ({ ok: true, data });
   const espera = est === 'lento' ? 2600 : 350 + Math.random() * 250;
   const r = (() => {
-    const escrita = /\.(save|delete|pagar|reabrir|gerarMes|registrar|salvar|excluir)$|^compra\.|^ws\.(criar|sair|convidar)|^admin\.(cadastro|papel)/.test(action);
+    const escrita = /\.(save|delete|pagar|reabrir|gerarMes|registrar|salvar|excluir|recalcular)$|^compra\.|^ws\.(criar|sair|convidar)|^admin\.(cadastro|papel)/.test(action);
     if (action === 'auth.pedir') return /@/.test(p.email || '') ? ok({ enviado: true }) : falha('Informe um e-mail válido.');
     if (action === 'auth.confirmar') return p.codigo === '123456' ? ok({ token: 'demo-tk' }) : falha('Código incorreto. Na demonstração, use 123456.');
     if (est === 'login' && !p._tk) return falha('Entre com seu e-mail para continuar.', 'LOGIN');
@@ -2872,6 +2955,11 @@ function demoApi(action, p) {
       case 'ws.convidar': db.usuarios.push({ id: p.email, email: p.email, nome: p.nome, papel: p.papel, ativo: 'SIM' }); return ok({ pessoa: { email: p.email, email_enviado: true } });
       case 'bootstrap': return ok({ me: { email: 'demo@gmail.com', nome: 'Ana Souza', papel: est === 'leitura' ? 'leitura' : (db.espacos.find((e) => e.id === p._ws) || {}).papel || 'admin', plataforma_admin: est !== 'leitura' }, espaco: db.espacos.find((e) => e.id === p._ws) || db.espacos[0], contas: db.contas, categorias: db.categorias, lojas: db.lojas, produtos: db.produtos, unidades: [{ codigo: 'un', nome: 'Unidade' }, { codigo: 'kg', nome: 'Quilo' }, { codigo: 'L', nome: 'Litro' }, { codigo: 'g', nome: 'Grama' }, { codigo: 'ml', nome: 'Mililitro' }], hoje: db.hoje, config: { compartilhar_precos: db.compartilhar !== false, compartilhamento_aviso: est !== 'aviso' } });
       case 'dashboard': return ok(demoDashboard(db, p.mes || db.mes));
+      case 'verba.listar': return ok(db.verbas.map((v) => demoVerba(db, v)));
+      case 'verba.detalhe': return ok(demoVerba(db, db.verbas.find((v) => v.id === p.id)));
+      case 'verba.salvar': { const o = Object.assign({}, p, { versao: (p.versao || 0) + 1 }); delete o.incluir_passados; const i = db.verbas.findIndex((v) => v.id === o.id); if (i >= 0) db.verbas[i] = o; else { o.id = 'vb' + (++db.n); db.verbas.push(o); } return ok({ verba: demoVerba(db, o), vinculados: p.incluir_passados ? 1 : 0 }); }
+      case 'verba.excluir': db.verbas = db.verbas.filter((v) => v.id !== p.id); return ok({ ok: true });
+      case 'verba.recalcular': return ok({ vinculados: 0 });
       case 'lancamentos.list': { const q = (p.busca || '').toLowerCase(); return ok(db.lancs.filter((l) => l.data.substr(0, 7) === p.mes && (!q || l.descricao.toLowerCase().includes(q))).sort((a, b) => b.data.localeCompare(a.data))); }
       case 'lancamentos.save': { if (p.id) { const i = db.lancs.findIndex((l) => l.id === p.id); db.lancs[i] = Object.assign({}, p, { versao: (p.versao || 1) + 1 }); return ok(db.lancs[i]); } const n_ = Math.max(1, p.parcelas || 1); for (let k = 0; k < n_; k++) db.lancs.push(Object.assign({}, p, { id: id(), versao: 1, data: k ? addDias(p.data, 30 * k) : p.data, valor: n_ > 1 ? Math.round(p.valor / n_ * 100) / 100 : p.valor, parcela_numero: n_ > 1 ? k + 1 : '', parcela_total: n_ > 1 ? n_ : '' })); return ok({}); }
       case 'lancamentos.delete': db.lancs = db.lancs.filter((l) => l.id !== p.id); return ok({});

@@ -1621,6 +1621,7 @@ const NAV = [
   { v: 'inicio', i: 'home', r: 'Início', cel: true },
   { v: 'lancamentos', i: 'lanc', r: 'Lançamentos', cel: true },
   { v: 'agenda', i: 'agenda', r: 'Contas', cel: true },
+  { v: 'projecao', i: 'chart', r: 'Projeção' },
   { v: 'compras', i: 'compras', r: 'Compras' },
   { v: 'precos', i: 'precos', r: 'Preços' },
   { v: 'cesta', i: 'cesta', r: 'Cesta' },
@@ -2212,6 +2213,36 @@ function abrirLancamento(l, defaults) {
   }
 }
 
+// ============================================================================ PROJEÇÃO (caixa e limite, mês a mês)
+const PROJ_ICONE = { agenda: 'agenda', fixa: 'repeat', fatura: 'card', divida: 'debt', verba: 'wallet', juros: 'coin' };
+const PROJ_ESTADO = { ok: null, atencao: ['Atenção', 'warning'], estoura: ['Acima do limite', 'danger'], negativo: ['Negativo', 'danger'] };
+const badgeProj = (m) => { const b = PROJ_ESTADO[m.estado]; return b ? badge(b[0], b[1]) : ''; };
+TELAS.projecao = {
+  titulo: 'Projeção',
+  esq: () => Esq.pagina(Esq.cabeca(0) + Esq.cartao(2) + Esq.lista(6)),
+  async abrir(main, vivo) {
+    S.projMeses = S.projMeses || 12;
+    const p = await api('projecao.calcular', { meses: S.projMeses }); if (!vivo()) return; S.proj = p;
+    const lim = p.limite_total > 0, alerta = p.meses.find((m) => m.estado !== 'ok');
+    main.innerHTML = cabeca('Projeção', ajudaIco('Caixa mês a mês a partir de hoje: contas a pagar e a receber, contas fixas ainda não geradas, faturas de cartão, parcelas de dívidas, verbas e juros do limite (taxa informada na conta). O saldo é o de todas as contas, menos cartões. Itens já cadastrados na agenda não são somados duas vezes.')) +
+      '<section class="card"><div class="stats"><div class="stat"><span class="stat__label">Caixa hoje</span><span class="stat__value' + (p.caixa_inicial < 0 ? ' t-neg' : '') + '">' + brl(p.caixa_inicial) + '</span></div>' +
+      (lim ? '<div class="stat"><span class="stat__label">Limite</span><span class="stat__value">' + brl(p.limite_total) + '</span></div>' : '') +
+      '<div class="stat"><span class="stat__label">Primeiro alerta</span><span class="stat__value">' + (alerta ? esc(maiusc(mesCurto(alerta.mes))) : '—') + '</span></div></div></section>' +
+      '<div class="chips" id="pj-chips" role="group" aria-label="Período">' + [6, 12, 24].map((n) => chip({ rotulo: n + ' meses', on: S.projMeses === n, attrs: 'data-v="' + n + '"' })).join('') + '</div>' +
+      '<section class="card card--flush" aria-label="Meses"><div class="list" role="list">' + p.meses.map((m, i) => '<button type="button" class="row row--button" role="listitem" data-acao="proj-mes" data-i="' + i + '">' + lead('calendar') + '<span class="row__main"><span class="row__title">' + esc(maiusc(mesNome(m.mes))) + '</span><span class="row__meta">' + metaSpans(['Entradas ' + brl(m.entradas), 'Saídas ' + brl(m.saidas)].concat(lim && m.limite_usado > 0 ? ['Limite usado ' + brl(m.limite_usado)] : [])) + '</span>' + (lim && m.limite_usado > 0 ? progresso(m.limite_usado / p.limite_total * 100, m.estado === 'estoura' ? 'danger' : m.estado === 'atencao' ? 'warning' : '', 'Limite usado') : '') + '</span>' +
+        '<span class="row__trail"><span class="row__amount num' + (m.saldo_fim < 0 ? ' t-neg' : '') + '">' + brl(m.saldo_fim) + '</span>' + badgeProj(m) + '</span>' + ico('chevRight') + '</button>').join('') + '</div></section>';
+    $('#pj-chips', main).onclick = (e) => { const c = e.target.closest('.chip'); if (c) { S.projMeses = Number(c.dataset.v); refresh(); } };
+  }
+};
+ACOES['proj-mes'] = (el) => abrirProjecaoMes(S.proj.meses[Number(el.dataset.i)], S.proj);
+function abrirProjecaoMes(m, p) {
+  const lim = p.limite_total > 0, itens = (dir) => m.itens.filter((x) => x.direcao === dir);
+  const bloco = (titulo, dir, sinal) => { const xs = itens(dir); return xs.length ? divisor(titulo) + '<div class="list" role="list">' + xs.map((x) => '<div class="row row--plain" role="listitem">' + lead(PROJ_ICONE[x.origem]) + '<span class="row__main"><span class="row__title">' + esc(x.descricao) + '</span><span class="row__meta">' + metaSpans([esc(x.rotulo), x.data ? dBR(x.data) : ''].filter(Boolean)) + '</span></span><span class="row__trail"><span class="row__amount num' + (dir === 'Receber' ? ' t-pos' : '') + '">' + sinal + brl(x.valor) + '</span></span></div>').join('') + '</div>' : ''; };
+  modal({ titulo: maiusc(mesNome(m.mes)), corpo: '<div class="stack"><div class="stats"><div class="stat"><span class="stat__label">Entradas</span><span class="stat__value t-pos">' + brl(m.entradas) + '</span></div><div class="stat"><span class="stat__label">Saídas</span><span class="stat__value">' + brl(m.saidas) + '</span></div><div class="stat"><span class="stat__label">Saldo final</span><span class="stat__value' + (m.saldo_fim < 0 ? ' t-neg' : '') + '">' + brl(m.saldo_fim) + '</span></div></div>' +
+    (lim ? '<div class="meter"><div class="meter__head"><span class="meter__label">Limite usado</span><span class="meter__value">' + brl(m.limite_usado) + ' de ' + brl(p.limite_total) + '</span></div>' + progresso(m.limite_usado / p.limite_total * 100, m.estado === 'estoura' ? 'danger' : m.estado === 'atencao' ? 'warning' : '', 'Limite usado') + '<span class="t-sm t-muted">Disponível ' + brl(m.limite_disponivel) + '</span></div>' : '') +
+    bloco('Entradas', 'Receber', '+ ') + bloco('Saídas', 'Pagar', '− ') + '</div>' });
+}
+
 // ---------- VERBAS: valor que a pessoa separa para um tipo de gasto; cada compra que se encaixa desconta e o app mostra quanto sobra
 const VERBA_TIPO = { ok: '', atencao: 'warning', estourada: 'danger' };
 async function verbasLista(forca) { if (forca || !S.verbas) S.verbas = await api('verba.listar'); return S.verbas; }
@@ -2545,7 +2576,7 @@ function abrirAddCesta() {
 // ============================================================================ CADASTROS (crud.list / crud.save / crud.delete)
 // campo: [chave, rótulo, tipo, opções]. tipos: texto, moeda, numero, dia, data, area, opcoes, sim, cat, conta, unidade
 const ENT = {
-  Contas: { titulo: 'Contas e cartões', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['conta', 'Conta bancária'], ['cartao', 'Cartão de crédito'], ['dinheiro', 'Dinheiro']]], ['limite', 'Limite', 'moeda'], ['saldo_inicial', 'Saldo inicial', 'moeda'], ['dia_fechamento', 'Dia de fechamento', 'dia', null, (o) => o.tipo === 'cartao'], ['dia_vencimento', 'Dia de vencimento', 'dia', null, (o) => o.tipo === 'cartao'], ['ativo', 'Ativa', 'sim']], sub: (r) => [TIPO_CONTA[r.tipo] || r.tipo, r.limite ? 'Limite ' + brl(r.limite) : ''] },
+  Contas: { titulo: 'Contas e cartões', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['conta', 'Conta bancária'], ['cartao', 'Cartão de crédito'], ['dinheiro', 'Dinheiro']]], ['limite', 'Limite', 'moeda'], ['saldo_inicial', 'Saldo inicial', 'moeda'], ['taxa_juros_am', 'Juros do limite ao mês (%)', 'numero', null, (o) => o.tipo === 'conta'], ['dia_fechamento', 'Dia de fechamento', 'dia', null, (o) => o.tipo === 'cartao'], ['dia_vencimento', 'Dia de vencimento', 'dia', null, (o) => o.tipo === 'cartao'], ['ativo', 'Ativa', 'sim']], sub: (r) => [TIPO_CONTA[r.tipo] || r.tipo, r.limite ? 'Limite ' + brl(r.limite) : ''] },
   Categorias: { titulo: 'Categorias e orçamento', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['Despesa', 'Despesa'], ['Receita', 'Receita']]], ['orcamento_mensal', 'Orçamento mensal', 'moeda'], ['ativo', 'Ativa', 'sim']], sub: (r) => [r.tipo, r.orcamento_mensal ? brl(r.orcamento_mensal) + '/mês' : '', r.catalogo_id ? 'Padrão' : ''] },
   Recorrencias: { titulo: 'Contas fixas e recorrentes', campos: [['nome', 'Nome'], ['direcao', 'Tipo', 'opcoes', [['Pagar', 'A pagar'], ['Receber', 'A receber']]], ['categoria_id', 'Categoria', 'cat'], ['valor', 'Valor', 'moeda'], ['dia', 'Dia do mês', 'dia'], ['conta_id', 'Conta', 'conta'], ['inicio', 'Início', 'data'], ['fim', 'Fim', 'data'], ['ativo', 'Ativa', 'sim'], ['gera_agenda', 'Criar conta no mês', 'sim']], sub: (r) => [r.direcao === 'Receber' ? 'A receber' : 'A pagar', 'Dia ' + r.dia, brl(r.valor)] },
   Dividas: { titulo: 'Dívidas', campos: [['credor', 'Credor'], ['tipo', 'Tipo'], ['saldo', 'Saldo', 'moeda'], ['taxa_am', 'Taxa ao mês (%)', 'numero'], ['parcela_valor', 'Parcela', 'moeda'], ['prazo_restante', 'Parcelas restantes', 'numero'], ['vencimento', 'Vencimento', 'data'], ['ativo', 'Ativa', 'sim'], ['obs', 'Observação', 'area']], sub: (r) => [brl(r.saldo), r.vencimento ? 'Vence ' + dBR(r.vencimento) : ''] },
@@ -2963,6 +2994,7 @@ function demoApi(action, p) {
       case 'ws.convidar': db.usuarios.push({ id: p.email, email: p.email, nome: p.nome, papel: p.papel, ativo: 'SIM' }); return ok({ pessoa: { email: p.email, email_enviado: true } });
       case 'bootstrap': return ok({ me: { email: 'demo@gmail.com', nome: 'Ana Souza', papel: est === 'leitura' ? 'leitura' : (db.espacos.find((e) => e.id === p._ws) || {}).papel || 'admin', plataforma_admin: est !== 'leitura' }, espaco: db.espacos.find((e) => e.id === p._ws) || db.espacos[0], contas: db.contas, categorias: db.categorias, lojas: db.lojas, produtos: db.produtos, unidades: [{ codigo: 'un', nome: 'Unidade' }, { codigo: 'kg', nome: 'Quilo' }, { codigo: 'L', nome: 'Litro' }, { codigo: 'g', nome: 'Grama' }, { codigo: 'ml', nome: 'Mililitro' }], hoje: db.hoje, config: { compartilhar_precos: db.compartilhar !== false, compartilhamento_aviso: est !== 'aviso' } });
       case 'dashboard': return ok(demoDashboard(db, p.mes || db.mes));
+      case 'projecao.calcular': { const n_ = p.meses || 12; let saldo = 524.62; const meses = []; for (let i = 0; i < n_; i++) { const mes = addMeses(db.hoje.substr(0, 7), i), ent = 5487, itens = [{ origem: 'fixa', rotulo: 'Conta fixa', descricao: 'Salário', valor: ent, data: mes + '-05', direcao: 'Receber' }, { origem: 'fixa', rotulo: 'Conta fixa', descricao: 'Aluguel', valor: 1300, data: mes + '-10', direcao: 'Pagar' }, { origem: 'divida', rotulo: 'Parcela', descricao: 'Banco Santander', valor: 612, data: mes + '-14', direcao: 'Pagar' }, { origem: 'verba', rotulo: 'Verba', descricao: 'Compras do mês', valor: 1240, data: '', direcao: 'Pagar' }], sai = 3152; saldo = Math.round((saldo + ent - sai) * 100) / 100; meses.push({ mes, entradas: ent, saidas: sai, juros: 0, saldo_fim: saldo, limite_usado: Math.max(0, -saldo), limite_disponivel: 11680 - Math.max(0, -saldo), estado: saldo < -11680 ? 'estoura' : saldo < -9000 ? 'atencao' : 'ok', itens }); } return ok({ hoje: db.hoje, caixa_inicial: 524.62, limite_total: 11680, taxa_juros: 8, alerta: 10500, meses }); }
       case 'verba.listar': return ok(db.verbas.map((v) => demoVerba(db, v)));
       case 'verba.detalhe': return ok(demoVerba(db, db.verbas.find((v) => v.id === p.id)));
       case 'verba.salvar': { const o = Object.assign({}, p, { versao: (p.versao || 0) + 1 }); delete o.incluir_passados; const i = db.verbas.findIndex((v) => v.id === o.id); if (i >= 0) db.verbas[i] = o; else { o.id = 'vb' + (++db.n); db.verbas.push(o); } return ok({ verba: demoVerba(db, o), vinculados: p.incluir_passados ? 1 : 0 }); }

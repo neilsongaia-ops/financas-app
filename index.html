@@ -2248,10 +2248,10 @@ const VERBA_TIPO = { ok: '', atencao: 'warning', estourada: 'danger' };
 async function verbasLista(forca) { if (forca || !S.verbas) S.verbas = await api('verba.listar'); return S.verbas; }
 const periodoVerba = (v) => v.repete === 'MENSAL' ? 'Todo mês' : dBR(v.inicio) + ' a ' + dBR(v.fim);
 const restanteVerba = (v) => v.restante >= 0 ? 'Sobram ' + brl(v.restante) : 'Estourou em ' + brl(-v.restante);
-const verbaViva = (v) => v.ativa !== 'NAO' && !v.encerrada;
+const verbaViva = (v) => v.ativa !== 'NAO' && !v.encerrada && !v.futura;
 const meterVerba = (v) => '<div class="meter"><div class="meter__head"><span class="meter__label"><span class="ellipsis">' + esc(v.nome) + '</span></span><span class="meter__value">' + brl(v.gasto) + ' de ' + brl(v.teto) + '</span></div>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) +
   '<span class="t-sm t-muted">' + esc(restanteVerba(v)) + (v.ritmo ? ' · ' + brl(v.ritmo) + ' por dia' : '') + '</span></div>';
-const badgeVerba = (v) => v.ativa === 'NAO' ? badge('Inativa') : v.encerrada ? badge('Encerrada') : v.estado === 'estourada' ? badge('Estourou', 'danger') : v.estado === 'atencao' ? badge('Atenção', 'warning') : '';
+const badgeVerba = (v) => v.ativa === 'NAO' ? badge('Inativa') : v.encerrada ? badge('Encerrada') : v.futura ? badge('Começa em ' + dBR(v.inicio)) : v.estado === 'estourada' ? badge('Estourou', 'danger') : v.estado === 'atencao' ? badge('Atenção', 'warning') : '';
 const rowVerba = (v) => '<button type="button" class="row row--button" role="listitem" data-id="' + esc(v.id) + '">' + lead('wallet') + '<span class="row__main"><span class="row__title">' + esc(v.nome) + '</span><span class="row__meta">' + metaSpans([periodoVerba(v), restanteVerba(v)].map(esc)) + '</span>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) + '</span>' + badgeVerba(v) + ico('chevRight') + '</button>';
 function abrirVerbas() {
   const m = modal({ titulo: 'Verbas', flush: true, corpo: Esq.lista(4).replace('card card--flush', ''), rodape: '<button type="button" class="btn btn--primary needs-edit" data-vb-new>' + ico('plus') + '<span>Nova verba</span></button>', aoFechar: () => { S.verbas = null; if (S.view === 'inicio') refresh(); } });

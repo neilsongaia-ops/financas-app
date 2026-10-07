@@ -1167,19 +1167,57 @@ async function hidratarImagens() {
 let _imgT = null;
 new MutationObserver(() => { clearTimeout(_imgT); _imgT = setTimeout(() => { hidratarImagens(); }, 120); }).observe(document.body, { childList: true, subtree: true });
 
-/** Foto -> miniatura JPEG (≈ 200 px, até ~28 mil caracteres em base64) para guardar no banco. */
+/** Desenha a fonte (imagem ou vídeo) numa miniatura JPEG QUADRADA (≈ 200 px, até ~28 mil caracteres em base64). `contain`: mostra a imagem inteira com fundo branco; senão, recorta o centro. */
+function miniaturaDe(fonte, larg, alt, contain) {
+  for (const [lado, q] of [[200, 0.72], [180, 0.65], [160, 0.58], [128, 0.5]]) {
+    const cv = document.createElement('canvas'); cv.width = lado; cv.height = lado; const cx = cv.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, lado, lado);
+    if (contain) { const k = lado / Math.max(larg, alt), w = larg * k, h = alt * k; cx.drawImage(fonte, 0, 0, larg, alt, (lado - w) / 2, (lado - h) / 2, w, h); }
+    else { const s = Math.min(larg, alt); cx.drawImage(fonte, (larg - s) / 2, (alt - s) / 2, s, s, 0, 0, lado, lado); }
+    const d = cv.toDataURL('image/jpeg', q); if (d.length <= 28000) return d;
+  }
+  throw new Error('Imagem grande demais. Tente de novo.');
+}
+/** Imagem baixada (foto do Open Food Facts) -> miniatura. */
 async function reduzirImagem(arq) {
   const url = URL.createObjectURL(arq);
   try {
     const img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem.')); i.src = url; });
-    const maior = Math.max(img.naturalWidth, img.naturalHeight) || 1;
-    for (const [max, q] of [[200, 0.72], [180, 0.65], [160, 0.58], [128, 0.5]]) {
-      const k = Math.min(1, max / maior), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
-      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0, w, h);
-      const d = cv.toDataURL('image/jpeg', q); if (d.length <= 28000) return d;
-    }
-    throw new Error('Imagem grande demais. Tente outra foto.');
+    return miniaturaDe(img, img.naturalWidth || 1, img.naturalHeight || 1, true);
   } finally { URL.revokeObjectURL(url); }
+}
+
+/** Fotografar o produto com a CÂMERA do aparelho (ao vivo). Não há envio de arquivo: a foto sai direto da câmera. */
+function abrirCameraFoto(aoFoto) {
+  let stream = null, parado = false, foto = '';
+  const botaoTirar = btn({ rotulo: 'Tirar foto', icone: 'camera', variante: 'primary', attrs: 'data-cf-tirar disabled' });
+  const m = modal({ titulo: 'Fotografar produto', tamanho: 'sm',
+    corpo: '<div class="camera" id="cf-cam" aria-live="polite"><div class="camera__idle"><span class="spinner spinner--lg" aria-hidden="true"></span><p class="t-sm">Abrindo a câmera…</p></div></div>',
+    rodape: botaoTirar, aoFechar: () => { parado = true; if (stream) stream.getTracks().forEach((t) => t.stop()); } });
+  const el = m.el, cam = $('#cf-cam', el);
+  const ligarTirar = () => { const b = $('[data-cf-tirar]', el); b.disabled = false; b.onclick = tirar; };
+  const mostrarVideo = () => { cam.innerHTML = '<video class="camera__video" playsinline muted></video><div class="camera__frame" aria-hidden="true"></div><p class="camera__msg">Enquadre o produto</p>'; const v = $('video', cam); v.srcObject = stream; return v.play(); };
+  const abrir = async () => {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      if (parado) { stream.getTracks().forEach((t) => t.stop()); return; }
+      await mostrarVideo(); m.rodape(botaoTirar); ligarTirar();
+    } catch (e) {
+      cam.innerHTML = '<div class="camera__idle">' + ico('camera', 'ico--xl') + '<p class="t-sm">Não consegui abrir a câmera. Permita o acesso à câmera no navegador e tente de novo.</p>' + btn({ rotulo: 'Tentar de novo', icone: 'refresh', variante: 'secondary', attrs: 'data-cf-de-novo' }) + '</div>';
+      $('[data-cf-de-novo]', cam).onclick = () => { cam.innerHTML = '<div class="camera__idle"><span class="spinner spinner--lg" aria-hidden="true"></span></div>'; abrir(); };
+    }
+  };
+  const tirar = () => {
+    const v = $('video', cam); if (!v || !v.videoWidth) return toast('A câmera ainda está abrindo.', { tipo: 'danger' });
+    try { foto = miniaturaDe(v, v.videoWidth, v.videoHeight, false); } catch (e) { return toast(e.message, { tipo: 'danger' }); }
+    if (navigator.vibrate) navigator.vibrate(30);
+    cam.innerHTML = '<img class="camera__video" alt="Foto tirada" src="' + foto + '">';
+    m.rodape(btn({ rotulo: 'Refazer', icone: 'refresh', variante: 'secondary', attrs: 'data-cf-refazer' }) + '<button type="button" class="btn btn--primary" data-cf-usar>' + ico('check') + '<span class="btn__label">Usar foto</span></button>');
+    $('[data-cf-refazer]', el).onclick = () => { foto = ''; mostrarVideo().then(() => { m.rodape(botaoTirar); ligarTirar(); }); };
+    $('[data-cf-usar]', el).onclick = () => { m.close(); aoFoto(foto); };
+  };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { cam.innerHTML = '<div class="camera__idle">' + ico('camera', 'ico--xl') + '<p class="t-sm">Este navegador não permite usar a câmera aqui.</p></div>'; return; }
+  abrir();
 }
 const TIPO_CONTA = { conta: 'Conta bancária', cartao: 'Cartão de crédito', dinheiro: 'Dinheiro' };
 const icoConta = (c) => c && c.tipo === 'cartao' ? 'card' : c && c.tipo === 'dinheiro' ? 'cash' : 'bank';
@@ -2421,7 +2459,7 @@ function crudModal(entity, obj, done, aviso) {
   const ctl = (c) => {
     const [k, rot, tipo, op] = c, v = obj[k] === undefined || obj[k] === null ? '' : obj[k], id = 'cr-' + k;
     if (tipo === 'imagem') return '<div class="field field--full"><span class="field__label">' + esc(rot) + '</span><div class="img-field"><span class="img-field__thumb" id="cr-foto"' + (obj.id ? ' data-img="' + esc(obj.id) + '"' : '') + '>' + (obj._img ? '<img alt="" src="' + obj._img + '">' : obj._img_url ? '<img alt="" src="' + esc(obj._img_url) + '" referrerpolicy="no-referrer">' : ico('precos')) + '</span>' +
-      '<div class="img-field__acoes"><label class="btn btn--secondary btn--sm needs-edit">' + ico('camera', 'ico--sm') + '<span class="btn__label">Foto</span><input type="file" accept="image/*" id="cr-foto-arq" hidden></label>' + btn({ rotulo: 'Remover foto', icone: 'trash', variante: 'ghost', tam: 'sm', editar: true, attrs: 'data-cr-foto-rm' }) + '</div></div></div>';
+      '<div class="img-field__acoes">' + btn({ rotulo: 'Fotografar', icone: 'camera', variante: 'secondary', tam: 'sm', editar: true, attrs: 'data-cr-foto-cam' }) + btn({ rotulo: 'Remover foto', icone: 'trash', variante: 'ghost', tam: 'sm', editar: true, attrs: 'data-cr-foto-rm' }) + '</div></div></div>';
     if (tipo === 'sim') return '<div class="field field--full">' + interruptor({ id, rotulo: rot, on: v !== 'NAO' }) + '</div>';
     if (tipo === 'moeda') return campo({ tipo: 'moeda', id, rotulo: rot, valor: v === '' ? '' : num(v) });
     if (tipo === 'numero' || tipo === 'dia') return campo({ id, rotulo: rot, valor: v === '' ? '' : String(v).replace('.', ','), inputmode: tipo === 'dia' ? 'numeric' : 'decimal', wrap: 'w-' + k });
@@ -2436,7 +2474,7 @@ function crudModal(entity, obj, done, aviso) {
   let fotoNova = null, fotoRemover = false;
   const fotoEl = $('#cr-foto', el);
   if (fotoEl) {
-    $('#cr-foto-arq', el).onchange = (e) => { const arq = e.target.files[0]; if (!arq) return; run(async () => { fotoNova = await reduzirImagem(arq); fotoRemover = false; fotoEl.removeAttribute('data-img'); fotoEl.innerHTML = '<img alt="" src="' + fotoNova + '">'; }); e.target.value = ''; };
+    $('[data-cr-foto-cam]', el).onclick = () => abrirCameraFoto((dados) => { fotoNova = dados; fotoRemover = false; fotoEl.removeAttribute('data-img'); fotoEl.innerHTML = '<img alt="" src="' + dados + '">'; });
     $('[data-cr-foto-rm]', el).onclick = () => { fotoNova = null; fotoRemover = true; obj._img = ''; obj._img_url = ''; fotoEl.removeAttribute('data-img'); fotoEl.innerHTML = ico('precos'); };
   }
   const condicionais = () => { const tipo = sels.tipo ? sels.tipo.valor : obj.tipo; cfg.campos.forEach((c) => { if (c[4]) { const w = $('#w-' + c[0], el) || $('#cr-' + c[0], el).closest('.field'); if (w) w.hidden = !c[4]({ tipo }); } }); };

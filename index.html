@@ -577,6 +577,12 @@ a.row:hover{ color: inherit; }
 .row--alert:hover{ background: var(--c-danger-soft); }
 .row--plain{ padding-inline: 0; }
 .row__lead{ flex: none; display: grid; place-items: center; width: var(--avatar); height: var(--avatar); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text-2); }
+.row__lead--img{ overflow: hidden; }
+.row__lead--img img, .img-field__thumb img{ display: block; width: 100%; height: 100%; object-fit: cover; }
+.row__lead--lg{ width: 4.5rem; height: 4.5rem; }
+.img-field{ display: flex; align-items: center; gap: var(--sp-4); }
+.img-field__thumb{ flex: none; display: grid; place-items: center; width: 5rem; height: 5rem; overflow: hidden; border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text-2); }
+.img-field__acoes{ display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .row__lead--cat{ color: var(--cat, var(--c-s8)); background: color-mix(in oklch, var(--cat, var(--c-s8)) 14%, var(--c-surface)); }
 .row__main{ flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .row__title{ font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1146,6 +1152,35 @@ function catVisual(cat) {
 }
 const leadCat = (cat) => { const v = catVisual(cat); return '<span class="row__lead row__lead--cat" style="--cat:' + v.cor + '">' + ico(v.icone) + '</span>'; };
 const lead = (icone) => '<span class="row__lead">' + ico(icone) + '</span>';
+
+// ---------- imagens de produto: miniatura (a do espaço ou a compartilhada pelo código de barras), carregada sob demanda
+const IMG = {};   // produto_id -> { h, dados } | null (sem imagem)
+const thumbProd = (id, icone, grande) => '<span class="row__lead row__lead--img' + (grande ? ' row__lead--lg' : '') + '"' + (id ? ' data-img="' + esc(id) + '"' : '') + '>' + (id && IMG[id] && IMG[id].dados ? '<img alt="" src="' + IMG[id].dados + '">' : ico(icone || 'precos')) + '</span>';
+async function hidratarImagens() {
+  const els = $$('[data-img]:not([data-img-ok])').filter((e) => e.dataset.img); if (!els.length) return;
+  const ids = [...new Set(els.map((e) => e.dataset.img))].filter((id) => IMG[id] === undefined).slice(0, 60);
+  if (ids.length) {
+    try { const r = await api('produto.imagens', { ids }); ids.forEach((id) => { IMG[id] = (r.imagens && r.imagens[id]) || null; }); } catch (e) { ids.forEach((id) => { IMG[id] = null; }); }
+  }
+  els.forEach((el) => { el.dataset.imgOk = '1'; const im = IMG[el.dataset.img]; if (im && im.dados) el.innerHTML = '<img alt="" src="' + im.dados + '">'; });
+}
+let _imgT = null;
+new MutationObserver(() => { clearTimeout(_imgT); _imgT = setTimeout(() => { hidratarImagens(); }, 120); }).observe(document.body, { childList: true, subtree: true });
+
+/** Foto -> miniatura JPEG (≈ 200 px, até ~28 mil caracteres em base64) para guardar no banco. */
+async function reduzirImagem(arq) {
+  const url = URL.createObjectURL(arq);
+  try {
+    const img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('Não consegui abrir a imagem.')); i.src = url; });
+    const maior = Math.max(img.naturalWidth, img.naturalHeight) || 1;
+    for (const [max, q] of [[200, 0.72], [180, 0.65], [160, 0.58], [128, 0.5]]) {
+      const k = Math.min(1, max / maior), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0, w, h);
+      const d = cv.toDataURL('image/jpeg', q); if (d.length <= 28000) return d;
+    }
+    throw new Error('Imagem grande demais. Tente outra foto.');
+  } finally { URL.revokeObjectURL(url); }
+}
 const TIPO_CONTA = { conta: 'Conta bancária', cartao: 'Cartão de crédito', dinheiro: 'Dinheiro' };
 const icoConta = (c) => c && c.tipo === 'cartao' ? 'card' : c && c.tipo === 'dinheiro' ? 'cash' : 'bank';
 
@@ -1940,14 +1975,14 @@ TELAS.precos = {
     desenhar();
   }
 };
-const rowPreco = (p) => '<div class="row row--button" role="listitem" tabindex="0" data-acao="preco-abrir" data-id="' + esc(p.id) + '">' + lead('precos') + '<div class="row__main"><span class="row__title">' + esc(p.nome) + '</span><span class="row__meta">' + metaSpans([p.n ? p.n + (p.n === 1 ? ' registro' : ' registros') : 'Sem preço', p.unidade ? 'por ' + esc(p.unidade) : '']) + '</span></div>' +
+const rowPreco = (p) => '<div class="row row--button" role="listitem" tabindex="0" data-acao="preco-abrir" data-id="' + esc(p.id) + '">' + thumbProd(p.id, 'precos') + '<div class="row__main"><span class="row__title">' + esc(p.nome) + '</span><span class="row__meta">' + metaSpans([p.n ? p.n + (p.n === 1 ? ' registro' : ' registros') : 'Sem preço', p.unidade ? 'por ' + esc(p.unidade) : '']) + '</span></div>' +
   '<div class="row__trail">' + (p.ultimo ? '<span class="row__amount num">' + brl(p.ultimo) + '</span>' : p.preco_ref ? '<span class="t-sm t-muted num">Ref. ' + brl(p.preco_ref) + '</span>' : '') + (p.variacao_ultima_pct ? badge(pct(p.variacao_ultima_pct), p.variacao_ultima_pct > 0 ? 'danger' : 'success', p.variacao_ultima_pct > 0 ? 'up' : 'down') : '') + '</div></div>';
 ACOES['preco-abrir'] = (el) => abrirProdutoPreco(el.dataset.id);
 ACOES['produto-novo'] = () => crudModal('Produtos', null, () => refresh());
 ACOES['ean-scan'] = () => abrirScanner({ titulo: 'Código de barras', formatos: ['ean_13', 'ean_8', 'upc_a', 'code_128'], barras: true, rotuloTexto: 'Números do código', aoLer: (t) => run(async () => {
   const r = await api('ean.buscar', { ean: t });
   if (r.origem === 'cadastro') abrirProdutoPreco(r.produto.id);
-  else crudModal('Produtos', Object.assign({}, r.produto), () => refresh(), r.origem === 'openfoodfacts' ? 'Dados encontrados. Confira antes de salvar.' : 'Produto não encontrado. Preencha os dados.');
+  else crudModal('Produtos', Object.assign({}, r.produto, { _img: r.imagem ? r.imagem.dados : '', _img_url: r.imagem ? '' : (r.imagem_url || '') }), () => refresh(), r.origem === 'openfoodfacts' ? 'Dados encontrados. Confira antes de salvar.' : 'Produto não encontrado. Preencha os dados.');
 }) });
 
 // ============================================================================ CESTA
@@ -1967,7 +2002,7 @@ function desenharCesta(main) {
   main = main || $('#main'); const host = $('#ce-l', main); if (!host) return;
   const mk = marcados();
   if (!S.cesta.length) { host.innerHTML = '<section class="card">' + estadoHtml({ icone: 'cesta', titulo: 'Cesta vazia', acao: { rotulo: 'Adicionar produto', icone: 'plus', editar: true, attrs: 'data-acao="cesta-add"' } }) + '</section>'; return; }
-  const row = (c) => { const i = S.cesta.indexOf(c), on = mk.has(c.produto_id), p = S.boot.produtos.find((x) => x.id === c.produto_id); return '<div class="row" role="listitem">' + '<label class="check' + (on ? ' is-done' : '') + ' grow"><input type="checkbox" class="check__input" data-ce-marca="' + i + '"' + (on ? ' checked' : '') + '><span class="row__main"><span class="row__title check__text">' + esc(c.nome || (p ? p.nome : '')) + '</span>' + (p && p.unidade_base ? '<span class="row__meta"><span>por ' + esc(p.unidade_base) + '</span></span>' : '') + '</span></label>' +
+  const row = (c) => { const i = S.cesta.indexOf(c), on = mk.has(c.produto_id), p = S.boot.produtos.find((x) => x.id === c.produto_id); return '<div class="row" role="listitem">' + '<label class="check' + (on ? ' is-done' : '') + ' grow"><input type="checkbox" class="check__input" data-ce-marca="' + i + '"' + (on ? ' checked' : '') + '>' + thumbProd(c.produto_id, 'cesta') + '<span class="row__main"><span class="row__title check__text">' + esc(c.nome || (p ? p.nome : '')) + '</span>' + (p && p.unidade_base ? '<span class="row__meta"><span>por ' + esc(p.unidade_base) + '</span></span>' : '') + '</span></label>' +
     '<div class="row__actions needs-edit">' + passo('data-ce-qtd="' + i + '"', c.qtd) + btn({ rotulo: 'Remover', icone: 'trash', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-acao="cesta-rm" data-i="' + i + '"' }) + '</div></div>'; };
   const falta = S.cesta.filter((c) => !mk.has(c.produto_id)), ok = S.cesta.filter((c) => mk.has(c.produto_id));
   host.innerHTML = '<section class="card card--flush" aria-label="A comprar"><div class="list-group"><span>A comprar</span><span>' + falta.length + '</span></div><div class="list" role="list">' + (falta.map(row).join('') || estadoHtml({ icone: 'checkCircle', titulo: 'Tudo no carrinho', compacto: true })) + '</div></section>' +
@@ -2006,7 +2041,7 @@ function rowEstoque(e) {
   const tipo = e.status === 'COMPRAR AGORA' ? 'danger' : e.status === 'Acaba em breve' ? 'warning' : e.status === 'Ok' ? 'success' : '';
   const total = e.ultima_compra && e.acaba_em ? Math.max(1, difDias(e.ultima_compra, e.acaba_em)) : null, resta = e.dias === null ? null : Math.max(0, e.dias);
   const prod = e.produto_id || (S.boot.produtos.find((p) => p.nome === e.nome) || {}).id;
-  return '<div class="row" role="listitem">' + lead('estoque') + '<div class="row__main"><span class="row__title">' + esc(e.nome) + '</span><span class="row__meta"><span>' + (e.acaba_em ? 'Acaba em ' + dBR(e.acaba_em) : e.ultima_compra ? 'Comprado em ' + dBR(e.ultima_compra) : 'Sem compra registrada') + '</span></span>' +
+  return '<div class="row" role="listitem">' + thumbProd(prod, 'estoque') + '<div class="row__main"><span class="row__title">' + esc(e.nome) + '</span><span class="row__meta"><span>' + (e.acaba_em ? 'Acaba em ' + dBR(e.acaba_em) : e.ultima_compra ? 'Comprado em ' + dBR(e.ultima_compra) : 'Sem compra registrada') + '</span></span>' +
     (total && resta !== null ? progresso(resta / total * 100, tipo, 'Duração restante') : '') + '</div>' +
     '<div class="row__trail">' + badge(e.dias === null ? '—' : e.dias <= 0 ? 'Acabou' : e.dias + (e.dias === 1 ? ' dia' : ' dias'), tipo) + '</div>' +
     (prod && tipo !== 'success' ? '<div class="row__actions needs-edit">' + btn({ rotulo: 'Adicionar à cesta', icone: 'cesta', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-acao="estoque-cesta" data-id="' + esc(prod) + '"' }) + '</div>' : '') + '</div>';
@@ -2267,11 +2302,11 @@ function abrirPreviaNota(p) {
   const ler = () => itens.forEach((it) => { const c = $('[data-k="' + it._k + '"]', host); if (!c) return; it.descricao = val(c, '[data-f=d]'); it.qtd = num(val(c, '[data-f=q]')); it.preco_unit = val(c, '.money'); it.tam_embalagem = val(c, '[data-f=t]'); });
   const soma = () => { ler(); $('#pn-total', el).textContent = brl(Math.round(itens.reduce((s, i) => s + (i.qtd || 0) * (i.preco_unit || 0), 0) * 100) / 100); $('#pn-n', el).textContent = itens.length; };
   const desenhar = () => {
-    host.innerHTML = itens.map((it) => { const assoc = !!(it.sugestao || it.produto_id); return '<div class="card" data-k="' + it._k + '"><div class="cluster cluster--between"><span data-badge>' + (assoc ? badge('Associado', 'success', 'check') : badge('Produto novo', 'warning', 'plus')) + '</span>' + btn({ rotulo: 'Remover item', icone: 'trash', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-pn-rm="' + it._k + '"' }) + '</div>' +
+    host.innerHTML = itens.map((it) => { const assoc = !!(it.sugestao || it.produto_id); return '<div class="card" data-k="' + it._k + '"><div class="cluster cluster--between"><span class="cluster">' + thumbProd(it.sugestao || it.produto_id, 'precos') + '<span data-badge>' + (assoc ? badge('Associado', 'success', 'check') : badge('Produto novo', 'warning', 'plus')) + '</span></span>' + btn({ rotulo: 'Remover item', icone: 'trash', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-pn-rm="' + it._k + '"' }) + '</div>' +
       '<div class="form-grid">' + campo({ id: 'pn-d-' + it._k, rotulo: 'Item da nota', valor: it.descricao || '', attrs: 'data-f="d"' }) + campo({ tipo: 'seletor', id: 'pn-p-' + it._k, rotulo: 'Produto' }) + '</div>' +
       '<div class="form-grid form-grid--3">' + campo({ id: 'pn-q-' + it._k, rotulo: 'Qtd', valor: it.qtd !== undefined ? numBR(it.qtd) : '1', inputmode: 'decimal', attrs: 'data-f="q"' }) + campo({ tipo: 'moeda', id: 'pn-u-' + it._k, rotulo: 'Unitário', valor: it.preco_unit }) + campo({ id: 'pn-t-' + it._k, rotulo: 'Embalagem', valor: it.tam_embalagem ? numBR(it.tam_embalagem) : '', placeholder: '1', inputmode: 'decimal', attrs: 'data-f="t"', ajuda: 'Tamanho na unidade do produto (café 250 g = 0,25 kg). Compara o preço por kg ou L.' }) + '</div></div>'; }).join('');
     itens.forEach((it) => seletor(host, '#pn-p-' + it._k, { opcoes: opcoesProdutos(), valor: it.sugestao || it.produto_id || '', rotulo: 'Produto', placeholder: 'Criar produto novo', acao: { rotulo: 'Criar produto novo', fn: (q, s) => s.definir('') },
-      aoMudar: (v) => { it.produto_id = v; it.sugestao = v; $('[data-k="' + it._k + '"] [data-badge]', host).innerHTML = v ? badge('Associado', 'success', 'check') : badge('Produto novo', 'warning', 'plus'); } }));
+      aoMudar: (v) => { it.produto_id = v; it.sugestao = v; $('[data-k="' + it._k + '"] [data-badge]', host).innerHTML = v ? badge('Associado', 'success', 'check') : badge('Produto novo', 'warning', 'plus'); const th = $('[data-k="' + it._k + '"] [data-img]', host); if (th) { th.dataset.img = v || ''; th.removeAttribute('data-img-ok'); th.innerHTML = ico('precos'); hidratarImagens(); } } }));
     soma();
   };
   desenhar();
@@ -2302,7 +2337,7 @@ function abrirProdutoPreco(id) {
     const h = await api('precos.historico', { produto_id: id }), p = h.produto, a = h.analise, un = p.unidade_base || 'un';
     m.titulo(p.nome);
     const lojas = h.por_loja.slice().sort((x, y) => x.preco_base - y.preco_base), maxL = Math.max(1, ...lojas.map((l) => l.preco_base));
-    m.corpo((a.n ? '<div class="stats"><div class="stat"><span class="stat__label">Último</span><span class="stat__value">' + brl(a.ultimo) + '</span><span class="stat__meta">por ' + esc(un) + '</span></div><div class="stat"><span class="stat__label">Variação</span><span class="stat__value' + (a.variacao_total_pct > 0 ? ' t-neg' : a.variacao_total_pct < 0 ? ' t-pos' : '') + '">' + pct(a.variacao_total_pct) + '</span><span class="stat__meta">do 1º ao último</span></div><div class="stat"><span class="stat__label">Menor</span><span class="stat__value">' + brl(a.menor.preco) + '</span><span class="stat__meta ellipsis">' + esc(a.menor.loja) + '</span></div></div>' +
+    m.corpo('<div class="cluster">' + thumbProd(id, 'precos', true) + '</div>' + (a.n ? '<div class="stats"><div class="stat"><span class="stat__label">Último</span><span class="stat__value">' + brl(a.ultimo) + '</span><span class="stat__meta">por ' + esc(un) + '</span></div><div class="stat"><span class="stat__label">Variação</span><span class="stat__value' + (a.variacao_total_pct > 0 ? ' t-neg' : a.variacao_total_pct < 0 ? ' t-pos' : '') + '">' + pct(a.variacao_total_pct) + '</span><span class="stat__meta">do 1º ao último</span></div><div class="stat"><span class="stat__label">Menor</span><span class="stat__value">' + brl(a.menor.preco) + '</span><span class="stat__meta ellipsis">' + esc(a.menor.loja) + '</span></div></div>' +
       '<section class="section"><div class="section__head"><h3>Histórico</h3>' + segmentado('pp-per', [{ v: '3', rotulo: '3 meses' }, { v: '6', rotulo: '6 meses' }, { v: '12', rotulo: '12 meses' }, { v: '0', rotulo: 'Tudo' }], '12', 'Período').replace('class="seg"', 'class="seg seg--inline"') + '</div><div id="pp-graf"></div></section>' : estadoHtml({ icone: 'precos', titulo: 'Sem preços registrados', compacto: true })) +
       (lojas.length ? '<section class="section"><h3>Por loja</h3><div class="stack">' + lojas.map((l, i) => '<div class="meter"><div class="meter__head"><span class="meter__label">' + ico('store', 'ico--sm') + '<span class="ellipsis">' + esc(l.loja) + '</span>' + (i === 0 && lojas.length > 1 ? badge('Menor', 'success') : '') + '</span><span class="meter__value">' + brl(l.preco_base) + ' · ' + dBR(l.data) + '</span></div>' + progresso(l.preco_base / maxL * 100, i === 0 ? 'success' : '', l.loja) + (l.preco_atacado ? '<span class="t-sm t-muted">Atacado ' + brl(l.preco_atacado) + ' a partir de ' + l.qtd_atacado + '</span>' : '') + '</div>').join('') + '</div></section>' : '') +
       '<details class="disclosure needs-edit"' + (a.n ? '' : ' open') + '><summary class="disclosure__sum">' + ico('plus') + '<span>Registrar preço</span>' + ico('chevDown') + '</summary><div class="disclosure__body"><div class="form-grid">' +
@@ -2364,7 +2399,7 @@ const ENT = {
   Dividas: { titulo: 'Dívidas', campos: [['credor', 'Credor'], ['tipo', 'Tipo'], ['saldo', 'Saldo', 'moeda'], ['taxa_am', 'Taxa ao mês (%)', 'numero'], ['parcela_valor', 'Parcela', 'moeda'], ['prazo_restante', 'Parcelas restantes', 'numero'], ['vencimento', 'Vencimento', 'data'], ['ativo', 'Ativa', 'sim'], ['obs', 'Observação', 'area']], sub: (r) => [brl(r.saldo), r.vencimento ? 'Vence ' + dBR(r.vencimento) : ''] },
   Usuarios: { titulo: 'Pessoas do espaço', campos: [['email', 'E-mail'], ['nome', 'Nome'], ['papel', 'Papel', 'opcoes', [['editor', 'Editor'], ['leitura', 'Leitura'], ['admin', 'Admin']]], ['ativo', 'Ativo', 'sim']], sub: (r) => [r.papel, r.ativo === 'NAO' ? 'Inativo' : ''] },
   Lojas: { titulo: 'Lojas', campos: [['nome', 'Nome'], ['cnpj', 'CNPJ', 'texto', 'numeric'], ['cidade', 'Cidade'], ['obs', 'Observação', 'area']], sub: (r) => [r.cidade || '', r.cnpj || ''] },
-  Produtos: { titulo: 'Produtos', campos: [['nome', 'Nome'], ['marca', 'Marca'], ['categoria_id', 'Categoria', 'cat'], ['unidade_base', 'Unidade', 'unidade'], ['ean', 'Código de barras', 'texto', 'numeric'], ['duracao_dias', 'Duração típica (dias)', 'numero'], ['preco_ref', 'Preço de referência', 'moeda'], ['ativo', 'Ativo', 'sim'], ['obs', 'Observação', 'area']], sub: (r) => [r.unidade_base ? 'por ' + r.unidade_base : '', r.marca || ''] }
+  Produtos: { titulo: 'Produtos', campos: [['_foto', 'Foto', 'imagem'], ['nome', 'Nome'], ['marca', 'Marca'], ['categoria_id', 'Categoria', 'cat'], ['unidade_base', 'Unidade', 'unidade'], ['ean', 'Código de barras', 'texto', 'numeric'], ['duracao_dias', 'Duração típica (dias)', 'numero'], ['preco_ref', 'Preço de referência', 'moeda'], ['ativo', 'Ativo', 'sim'], ['obs', 'Observação', 'area']], sub: (r) => [r.unidade_base ? 'por ' + r.unidade_base : '', r.marca || ''] }
 };
 function abrirLista(entity) {
   const cfg = ENT[entity], nomeCol = cfg.campos[0][0];
@@ -2385,6 +2420,8 @@ function crudModal(entity, obj, done, aviso) {
   const sels = {};
   const ctl = (c) => {
     const [k, rot, tipo, op] = c, v = obj[k] === undefined || obj[k] === null ? '' : obj[k], id = 'cr-' + k;
+    if (tipo === 'imagem') return '<div class="field field--full"><span class="field__label">' + esc(rot) + '</span><div class="img-field"><span class="img-field__thumb" id="cr-foto"' + (obj.id ? ' data-img="' + esc(obj.id) + '"' : '') + '>' + (obj._img ? '<img alt="" src="' + obj._img + '">' : obj._img_url ? '<img alt="" src="' + esc(obj._img_url) + '" referrerpolicy="no-referrer">' : ico('precos')) + '</span>' +
+      '<div class="img-field__acoes"><label class="btn btn--secondary btn--sm needs-edit">' + ico('camera', 'ico--sm') + '<span class="btn__label">Foto</span><input type="file" accept="image/*" id="cr-foto-arq" hidden></label>' + btn({ rotulo: 'Remover foto', icone: 'trash', variante: 'ghost', tam: 'sm', editar: true, attrs: 'data-cr-foto-rm' }) + '</div></div></div>';
     if (tipo === 'sim') return '<div class="field field--full">' + interruptor({ id, rotulo: rot, on: v !== 'NAO' }) + '</div>';
     if (tipo === 'moeda') return campo({ tipo: 'moeda', id, rotulo: rot, valor: v === '' ? '' : num(v) });
     if (tipo === 'numero' || tipo === 'dia') return campo({ id, rotulo: rot, valor: v === '' ? '' : String(v).replace('.', ','), inputmode: tipo === 'dia' ? 'numeric' : 'decimal', wrap: 'w-' + k });
@@ -2396,6 +2433,12 @@ function crudModal(entity, obj, done, aviso) {
   const m = modal({ titulo: (novo ? 'Novo' : 'Editar') + ' · ' + cfg.titulo, corpo: (aviso ? alerta({ tipo: 'info', texto: aviso }) : '') + '<div class="form-grid">' + cfg.campos.map(ctl).join('') + '</div>',
     rodape: (novo ? '' : btn({ rotulo: 'Excluir', icone: 'trash', variante: 'danger-ghost', so: true, editar: true, attrs: 'data-cr-del' })) + '<button type="button" class="btn btn--primary needs-edit" data-cr-ok>Salvar</button>' });
   const el = m.el;
+  let fotoNova = null, fotoRemover = false;
+  const fotoEl = $('#cr-foto', el);
+  if (fotoEl) {
+    $('#cr-foto-arq', el).onchange = (e) => { const arq = e.target.files[0]; if (!arq) return; run(async () => { fotoNova = await reduzirImagem(arq); fotoRemover = false; fotoEl.removeAttribute('data-img'); fotoEl.innerHTML = '<img alt="" src="' + fotoNova + '">'; }); e.target.value = ''; };
+    $('[data-cr-foto-rm]', el).onclick = () => { fotoNova = null; fotoRemover = true; obj._img = ''; obj._img_url = ''; fotoEl.removeAttribute('data-img'); fotoEl.innerHTML = ico('precos'); };
+  }
   const condicionais = () => { const tipo = sels.tipo ? sels.tipo.valor : obj.tipo; cfg.campos.forEach((c) => { if (c[4]) { const w = $('#w-' + c[0], el) || $('#cr-' + c[0], el).closest('.field'); if (w) w.hidden = !c[4]({ tipo }); } }); };
   cfg.campos.forEach((c) => {
     const [k, rot, tipo, op] = c, v = obj[k] === undefined || obj[k] === null ? '' : obj[k];
@@ -2408,19 +2451,29 @@ function crudModal(entity, obj, done, aviso) {
   });
   condicionais();
   $('[data-cr-ok]', el).onclick = (e) => {
-    const k0 = cfg.campos[0][0];
+    const k0 = cfg.campos.find((c) => c[2] !== 'imagem')[0];
     if (!erroCampo(el, 'cr-' + k0, val(el, '#cr-' + k0).trim() ? '' : 'Campo obrigatório')) return;
     ocupado(e.currentTarget, async () => {
       const o = Object.assign({}, obj);
       cfg.campos.forEach((c) => {
         const [k, , tipo] = c, sel = '#cr-' + k;
+        if (tipo === 'imagem') return;
         if (sels[k]) o[k] = sels[k].valor;
         else if (tipo === 'sim') o[k] = $(sel, el).checked ? 'SIM' : 'NAO';
         else if (tipo === 'moeda') { const t = $(sel + ' .money__input', el).value; o[k] = t === '' ? '' : num(t); }
         else if (tipo === 'numero' || tipo === 'dia') { const t = val(el, sel); o[k] = t === '' ? '' : num(t); }
         else o[k] = val(el, sel);
       });
-      await api('crud.save', { entity, obj: o, _rid: m.rid });
+      delete o._img; delete o._img_url; delete o._foto;
+      const salvo = await api('crud.save', { entity, obj: o, _rid: m.rid });
+      const pid = (salvo && salvo.id) || obj.id;
+      if (entity === 'Produtos' && pid) {
+        try {
+          if (fotoNova) { await api('produto.imagem.salvar', { produto_id: pid, dados: fotoNova, origem: 'foto' }); delete IMG[pid]; }
+          else if (fotoRemover && obj.id) { await api('produto.imagem.remover', { produto_id: pid }); delete IMG[pid]; }
+          else if (obj._img_url && novo) { const bl = await (await fetch(obj._img_url)).blob(); await api('produto.imagem.salvar', { produto_id: pid, dados: await reduzirImagem(bl), origem: 'openfoodfacts' }); delete IMG[pid]; }
+        } catch (e2) { toast('Produto salvo, mas a foto não pôde ser guardada.', { tipo: 'danger' }); }
+      }
       m.close(); toast('Salvo'); await refreshBoot(); if (done) done();
     });
   };
@@ -2720,6 +2773,9 @@ function demoApi(action, p) {
       case 'cesta.get': return ok(db.cesta.map((c) => Object.assign({}, c, { nome: (db.produtos.find((x) => x.id === c.produto_id) || {}).nome || c.nome })));
       case 'cesta.salvar': db.cesta = p.itens.map((c) => Object.assign({}, c)); return ok({});
       case 'cesta.otimizar': return ok(db.cesta.length ? { economia: 23.4, ranking: [{ loja: 'Atacadão', total: 142.3, completa: true, faltando: [] }, { loja: 'Assaí', total: 151.8, completa: true, faltando: [] }, { loja: 'Pão de Açúcar', total: 165.7, completa: false, faltando: ['Ovo', 'Pão de forma integral com castanhas e grãos'] }] } : { economia: 0, ranking: [] });
+      case 'produto.imagens': { const cor = ['#6b8afd', '#34a58f', '#e0a33a', '#c9577a', '#7a6bd6']; const o = {}; (p.ids || []).forEach((id, i) => { if (i % 3 !== 2) o[id] = { h: 'demo' + i, dados: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="' + cor[i % 5] + '"/><rect x="18" y="14" width="28" height="38" rx="5" fill="#fff" opacity=".85"/><rect x="22" y="22" width="20" height="8" rx="2" fill="' + cor[i % 5] + '"/></svg>') }; else o[id] = null; }); return ok({ imagens: o }); }
+      case 'produto.imagem.salvar': return ok({ h: 'demo', compartilhada: true });
+      case 'produto.imagem.remover': return ok({ ok: true });
       case 'ean.buscar': return ok({ origem: 'openfoodfacts', produto: { nome: 'Café torrado e moído 500 g', marca: 'Exemplo', ean: p.ean, unidade_base: 'kg' } });
       case 'nfce.ler': return ok({ chave: '35261075315333000109650010000123451000123456', emitente: 'ATACADAO S.A.', cnpj: '75315333000109', loja: db.lojas[0], data: db.hoje, total: 87.4, avisos: p.texto ? [] : ['Dois itens sem produto correspondente. Confira.'], itens: [{ descricao: 'CAFE TORRADO MOIDO 500G', qtd: 2, unidade: 'UN', preco_unit: 18.9, sugestao: 'P3', tam_embalagem: 0.5 }, { descricao: 'OVOS BRANCOS GRANDES C/30', qtd: 1, unidade: 'UN', preco_unit: 22.5, sugestao: 'P5', tam_embalagem: 30 }, { descricao: 'BISCOITO RECHEADO CHOCOLATE 140G', qtd: 3, unidade: 'UN', preco_unit: 3.29 }, { descricao: 'AGUA SANITARIA 2L', qtd: 1, unidade: 'UN', preco_unit: 7.49 }] });
       case 'compra.registrar': { const tot = p.itens.reduce((s, i) => s + i.qtd * i.preco_unit, 0); const c = { id: id(), data: p.data, loja: (db.lojas.find((l) => l.id === p.loja_id) || {}).nome || p.loja_nome || 'Compra', n_itens: p.itens.length, total: tot, chave_nfce: p.chave }; db.compras.unshift(c); db.itensCompra[c.id] = p.itens.map((i) => ({ produto: i.descricao, qtd: i.qtd, preco_unit: i.preco_unit, total: i.qtd * i.preco_unit })); return ok({ total: tot, pontos_de_preco: p.itens.length }); }

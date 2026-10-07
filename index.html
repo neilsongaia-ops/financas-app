@@ -1649,7 +1649,15 @@ function renderTopbar() {
     btn({ rotulo: 'Aparência', icone: p === 'dark' ? 'moon' : p === 'light' ? 'sun' : 'auto', variante: 'ghost', so: true, attrs: 'data-acao="tema-menu"' }) +
     (me ? '<button type="button" class="btn btn--ghost btn--icon" data-acao="conta-menu" aria-label="Sua conta" data-tip="' + esc(me.nome || me.email) + '">' + avatar(me.nome || me.email, { sm: true }) + '</button>' : '') + '</div>';
 }
-function mostrarApp() { $('#auth').hidden = true; $('#app').hidden = false; $('#fab').hidden = false; }
+function mostrarApp() { $('#auth').hidden = true; $('#app').hidden = false; $('#fab').hidden = false; setTimeout(avisarCompartilhamento, 900); }
+function avisarCompartilhamento() {
+  const c = S.boot && S.boot.config; if (!c || S.avisoCompart || c.compartilhamento_aviso || c.compartilhar_precos === false || !podeEditar()) return;
+  S.avisoCompart = true;
+  const m = modal({ titulo: 'Preços compartilhados', tamanho: 'sm', corpo: '<p>O preço, a loja e a data das suas compras ajudam outras pessoas a achar preços melhores, e você vê os preços delas.</p><p class="t-sm t-muted">Nada pessoal é compartilhado. Você muda isso quando quiser em Mais.</p>',
+    rodape: (ehAdmin() ? btn({ rotulo: 'Desligar', variante: 'secondary', attrs: 'data-cp-off' }) : '') + '<button type="button" class="btn btn--primary" data-cp-ok>Entendi</button>' });
+  $('[data-cp-ok]', m.el).onclick = () => run(async () => { await api('compartilhamento.ciente'); S.boot.config.compartilhamento_aviso = true; m.close(); });
+  const off = $('[data-cp-off]', m.el); if (off) off.onclick = () => run(async () => { await api('compartilhamento.set', { ativo: false }); await api('compartilhamento.ciente'); S.boot.config.compartilhar_precos = false; S.boot.config.compartilhamento_aviso = true; m.close(); toast('Compartilhamento desligado'); });
+}
 
 // ---------- rotas (hash: #inicio, #lancamentos…; o botão voltar funciona)
 function go(v) { if (!TELAS[v]) v = 'inicio'; if (location.hash.slice(1) !== v) location.hash = v; else abrirTela(v); }
@@ -1804,7 +1812,7 @@ function detalhesInicio(d) {
   const contas = d.contas.map((c) => '<div class="row row--plain" role="listitem">' + lead(icoConta(c)) + '<div class="row__main"><span class="row__title">' + esc(c.nome) + '</span>' + (c.limite ? '<span class="row__meta"><span>Limite usado ' + c.limite.pct + '%</span></span>' : '') + '</div><div class="row__trail"><span class="row__amount num' + (c.saldo < 0 ? ' t-neg' : '') + '">' + brl(c.saldo) + '</span></div></div>').join('');
   const cartoes = d.cartoes.map((c) => { const f = c.faturas[0]; return '<div class="row row--plain" role="listitem">' + lead('card') + '<div class="row__main"><span class="row__title">' + esc(c.nome) + '</span><span class="row__meta">' + (f ? metaSpans(['Vence ' + dBR(f.vence), f.status === 'Vencida' ? badge('Vencida', 'danger') : esc(f.status)]) : '<span>Sem fatura em aberto</span>') + '</span></div><div class="row__trail"><span class="row__amount num">' + brl(c.deve) + '</span>' + (c.deve > 0 ? btn({ rotulo: 'Pagar fatura', variante: 'ghost', tam: 'sm', editar: true, attrs: 'data-acao="fatura-pagar" data-id="' + esc(c.id) + '"' }) : '') + '</div></div>'; }).join('');
   const lim = d.limite;
-  const alertasN = d.estoque.length + d.alertas_preco.length;
+  const alertasN = d.estoque.length + d.alertas_preco.length + (d.alertas_compartilhados || []).length;
   return '<div class="stack stack--sm">' +
     '<details class="disclosure">' + sum('Orçamento por categoria', 'chart', acima ? badge(acima + ' acima', 'danger') : '') + '<div class="disclosure__body">' + (orc.length ? orc.map(meter).join('') : estadoHtml({ icone: 'chart', titulo: 'Sem orçamento', compacto: true, acao: { rotulo: 'Definir orçamento', variante: 'secondary', editar: true, attrs: 'data-acao="cad-abrir" data-ent="Categorias"' } })) + '</div></details>' +
     '<details class="disclosure">' + sum('Contas e cartões', 'bank') + '<div class="disclosure__body"><div class="list" role="list">' + contas + cartoes + '</div></div></details>' +
@@ -1814,6 +1822,7 @@ function detalhesInicio(d) {
     (alertasN ? '<details class="disclosure">' + sum('Alertas', 'warn', badge(String(alertasN), 'warning')) + '<div class="disclosure__body"><div class="list" role="list">' +
       d.estoque.map((e) => '<a class="row row--plain row--button" role="listitem" href="#estoque">' + lead('estoque') + '<div class="row__main"><span class="row__title">' + esc(e.nome) + '</span><span class="row__meta"><span>Estoque</span></span></div>' + badge(e.status === 'COMPRAR AGORA' ? 'Comprar agora' : 'Em ' + e.dias + ' dias', e.status === 'COMPRAR AGORA' ? 'danger' : 'warning') + '</a>').join('') +
       d.alertas_preco.map((a) => '<a class="row row--plain row--button" role="listitem" href="#precos">' + lead('precos') + '<div class="row__main"><span class="row__title">' + esc(a.nome) + '</span><span class="row__meta"><span>Preço</span></span></div>' + badge(pct(a.pct), a.pct > 0 ? 'danger' : 'success', a.pct > 0 ? 'up' : 'down') + '</a>').join('') +
+      (d.alertas_compartilhados || []).map((a) => '<a class="row row--plain row--button" role="listitem" href="#precos">' + lead('store') + '<div class="row__main"><span class="row__title">' + esc(a.nome) + '</span><span class="row__meta"><span>' + brl(a.preco_base) + ' · ' + esc(a.loja) + '</span></span></div>' + badge(pct(a.pct), 'success', 'down') + '</a>').join('') +
     '</div></div></details>' : '') + '</div>';
 }
 ACOES['fatura-pagar'] = (el) => { const c = (S.dash.cartoes || []).find((x) => x.id === el.dataset.id); if (c) abrirPagarFatura(c); };
@@ -2104,7 +2113,7 @@ TELAS.mais = {
       '<section class="card"><div class="cluster">' + avatar(me.nome || me.email) + '<div class="grow"><p class="row__title">' + esc(me.nome || me.email || '') + '</p><p class="t-sm t-muted ellipsis">' + esc(me.email || '') + '</p></div>' + badge(me.papel === 'admin' ? 'Admin' : me.papel === 'leitura' ? 'Leitura' : 'Editor', 'primary') + '</div></section>' +
       sec('Ir para', NAV.filter((n) => !n.cel).map((n) => '<a class="row row--button" role="listitem" href="#' + n.v + '">' + lead(n.i) + '<span class="row__main"><span class="row__title">' + n.r + '</span></span>' + ico('chevRight') + '</a>').join(''), 'so-celular') +
       sec('Cadastros', Object.keys(ENT).filter((k) => k !== 'Usuarios').map((k) => linha('data-acao="cad-abrir" data-ent="' + k + '"', ENT_ICONE[k], ENT[k].titulo)).join('')) +
-      sec('Espaço', '<div class="needs-admin">' + linha('data-acao="convite"', 'userPlus', 'Pessoas e convites') + '<div class="row" role="listitem">' + interruptor({ id: 'm-comp', rotulo: 'Compartilhar meus preços', meta: 'Só o preço, a loja e a data', on: !(S.boot.config && S.boot.config.compartilhar_precos === false) }) + '</div></div>' + linha('data-acao="espacos"', 'space', 'Meus espaços', S.boot.espaco ? S.boot.espaco.nome : '')) +
+      sec('Espaço', '<div class="needs-admin">' + linha('data-acao="convite"', 'userPlus', 'Pessoas e convites') + '<div class="row" role="listitem">' + interruptor({ id: 'm-comp', rotulo: 'Compartilhar meus preços', meta: 'Só o preço, a loja e a data', on: !(S.boot.config && S.boot.config.compartilhar_precos === false) }) + '</div></div>' + linha('data-acao="contribuicao"', 'chart', 'Minha contribuição') + linha('data-acao="espacos"', 'space', 'Meus espaços', S.boot.espaco ? S.boot.espaco.nome : '')) +
       '<section class="section"><h2 class="t-sm t-muted">Aparência</h2><div class="card">' + segmentado('m-tema', [{ v: 'light', rotulo: 'Claro', icone: 'sun' }, { v: 'dark', rotulo: 'Escuro', icone: 'moon' }, { v: 'auto', rotulo: 'Automático', icone: 'auto' }], Tema.pref(), 'Tema') + '</div></section>' +
       '<div class="needs-plataforma">' + sec('Plataforma', linha('data-acao="admin-plataforma"', 'shield', 'Administração da plataforma')) + '</div>' +
       (S.tk ? '<div class="card card--flush"><button type="button" class="row row--button t-neg" data-acao="sair">' + lead('logout') + '<span class="row__main"><span class="row__title">Sair</span></span></button></div>' : '');
@@ -2114,6 +2123,16 @@ TELAS.mais = {
 };
 ACOES['cad-abrir'] = (el) => abrirLista(el.dataset.ent);
 ACOES.convite = () => abrirConvite();
+ACOES.contribuicao = () => abrirContribuicao();
+function abrirContribuicao() {
+  const m = modal({ titulo: 'Minha contribuição', tamanho: 'sm', corpo: Esq.pagina('<div class="stats">' + Esq.linha('60%', 'hero') + Esq.linha('60%', 'hero') + '</div>') });
+  run(async () => {
+    const r = await api('reputacao.minha'), nivel = { novo: 'Novo', confiavel: 'Confiável', bloqueado: 'Bloqueado' }[r.nivel] || r.nivel;
+    m.corpo('<div class="stats"><div class="stat"><span class="stat__label">Nível</span><span class="stat__value">' + badge(nivel, r.nivel === 'confiavel' ? 'success' : r.nivel === 'bloqueado' ? 'danger' : 'primary') + '</span></div><div class="stat"><span class="stat__label">Pontos</span><span class="stat__value">' + r.pontos + '</span></div>' +
+      '<div class="stat"><span class="stat__label">Preços publicados</span><span class="stat__value">' + r.publicados + '</span></div><div class="stat"><span class="stat__label">Confirmados</span><span class="stat__value">' + r.validados + '</span></div></div>' +
+      (r.nivel === 'novo' && r.faltam_para_confiavel ? '<p class="t-sm t-muted">Faltam ' + r.faltam_para_confiavel + ' pontos para ficar confiável.</p>' : ''));
+  }, () => m.close());
+}
 ACOES.espacos = () => abrirEspacos();
 ACOES['admin-plataforma'] = () => abrirAdminPlataforma();
 ACOES.sair = async () => { if (await confirmar({ titulo: 'Sair do app?', ok: 'Sair', perigo: false })) sair(); };
@@ -2363,7 +2382,7 @@ function abrirPreviaNota(p) {
     if (!lista.length) return toast('Inclua ao menos um item.', { tipo: 'danger' });
     if (!sLoja.valor && !erroCampo(el, 'pn-lojanome', val(el, '#pn-lojanome').trim() ? '' : 'Informe a loja')) return;
     ocupado(e.currentTarget, async () => {
-      const r = await api('compra.registrar', { _rid: m.rid, chave: p.chave, data: val(el, '#pn-data'), loja_id: sLoja.valor, loja_nome: val(el, '#pn-lojanome'), cnpj: p.cnpj, conta_id: sConta.valor, itens: lista });
+      const r = await api('compra.registrar', { _rid: m.rid, chave: p.chave, data: val(el, '#pn-data'), loja_id: sLoja.valor, loja_nome: val(el, '#pn-lojanome'), cnpj: p.cnpj, loja_cidade: p.loja_cidade || '', loja_uf: p.loja_uf || '', conta_id: sConta.valor, itens: lista });
       m.close(); toast('Compra registrada: ' + brl(r.total)); await refreshBoot(); invalidar(); if (S.view === 'compras') refresh(); else go('compras');
     });
   };
@@ -2378,7 +2397,8 @@ function abrirProdutoPreco(id) {
     m.titulo(p.nome);
     const comp = (cp.produtos && cp.produtos[id]) || [];
     const secComp = comp.length ? '<section class="section"><h3>Preço nas lojas</h3><div class="card card--flush"><div class="list" role="list">' + comp.map((l, i) => '<div class="row" role="listitem">' + lead('store') + '<div class="row__main"><span class="row__title ellipsis">' + esc(l.loja) + '</span><span class="row__meta">' +
-      metaSpans([l.idade_dias === 0 ? 'hoje' : 'há ' + l.idade_dias + (l.idade_dias === 1 ? ' dia' : ' dias'), l.cidade ? esc(l.cidade) : '', l.verificado ? 'nota fiscal' : '']) + '</span></div><div class="row__trail"><span class="row__amount num">' + brl(l.preco_base) + '</span><span class="t-sm t-muted">por ' + esc(un) + '</span>' +
+      metaSpans([l.idade_dias === 0 ? 'hoje' : 'há ' + l.idade_dias + (l.idade_dias === 1 ? ' dia' : ' dias'), l.cidade ? esc(l.cidade) : '', l.verificado ? 'nota fiscal' : l.confirmado ? 'confirmado' : 'não confirmado']) + '</span></div>' +
+      (!l.verificado && !l.minha ? '<div class="row__actions needs-edit">' + btn({ rotulo: 'Confirmo este preço', icone: 'check', variante: l.meu_voto === 'confirmo' ? 'primary' : 'ghost', tam: 'sm', so: true, attrs: 'data-pv="confirmo" data-id="' + esc(l.id) + '"' }) + btn({ rotulo: 'O preço mudou', icone: 'x', variante: l.meu_voto === 'discordo' ? 'danger' : 'ghost', tam: 'sm', so: true, attrs: 'data-pv="discordo" data-id="' + esc(l.id) + '"' }) + '</div>' : '') + '<div class="row__trail"><span class="row__amount num">' + brl(l.preco_base) + '</span><span class="t-sm t-muted">por ' + esc(un) + '</span>' +
       (i === 0 && comp.length > 1 ? badge('Menor', 'success') : '') + '</div></div>').join('') + '</div></div></section>' : '';
     const lojas = h.por_loja.slice().sort((x, y) => x.preco_base - y.preco_base), maxL = Math.max(1, ...lojas.map((l) => l.preco_base));
     m.corpo('<div class="cluster">' + thumbProd(id, 'precos', true) + '</div>' + (a.n ? '<div class="stats"><div class="stat"><span class="stat__label">Último</span><span class="stat__value">' + brl(a.ultimo) + '</span><span class="stat__meta">por ' + esc(un) + '</span></div><div class="stat"><span class="stat__label">Variação</span><span class="stat__value' + (a.variacao_total_pct > 0 ? ' t-neg' : a.variacao_total_pct < 0 ? ' t-pos' : '') + '">' + pct(a.variacao_total_pct) + '</span><span class="stat__meta">do 1º ao último</span></div><div class="stat"><span class="stat__label">Menor</span><span class="stat__value">' + brl(a.menor.preco) + '</span><span class="stat__meta ellipsis">' + esc(a.menor.loja) + '</span></div></div>' +
@@ -2405,6 +2425,7 @@ function abrirProdutoPreco(id) {
     const sLoja = seletor(el, '#rp-loja', { opcoes: opcoesLojas(), valor: '', rotulo: 'Loja', placeholder: 'Escolher loja' });
     $('#rp-at', el).onchange = (e) => { $('#rp-atw', el).hidden = !e.target.checked; };
     $('[data-pp-edit]', el).onclick = () => { m.close(); crudModal('Produtos', p, () => refresh()); };
+    $$('[data-pv]', el).forEach((bt) => bt.onclick = () => run(async () => { await api('preco.confirmar', { id: bt.dataset.id, tipo: bt.dataset.pv }); toast(bt.dataset.pv === 'confirmo' ? 'Obrigado pela confirmação' : 'Obrigado, vamos conferir'); carregar(); }));
     $('[data-rp-ok]', el).onclick = (e) => {
       if (!erroCampo(el, 'rp-loja', sLoja.valor ? '' : 'Escolha a loja')) return;
       if (!erroCampo(el, 'rp-p', val(el, '#rp-p') > 0 ? '' : 'Informe o preço')) return;
@@ -2647,14 +2668,33 @@ function abrirConvite() {
   };
 }
 
+function abrirModeracao() {
+  const m = modal({ titulo: 'Moderação do catálogo', tamanho: 'wide', corpo: Esq.pagina(Esq.cartao() + Esq.lista(4)) });
+  const desenha = () => run(async () => {
+    const d = await api('admin.catalogo'), t = d.totais, stat = (r, v) => '<div class="stat"><span class="stat__label">' + r + '</span><span class="stat__value">' + v + '</span></div>';
+    m.corpo('<div class="stats">' + stat('Produtos', t.produtos) + stat('Lojas', t.lojas) + stat('Preços', t.precos) + stat('Validados', t.validados) + '</div>' +
+      '<section class="section"><div class="section__head"><h3>Preços suspeitos ' + badge(String(d.suspeitos.length), d.suspeitos.length ? 'warning' : '') + '</h3></div>' +
+      (d.suspeitos.length ? '<div class="card card--flush"><div class="list" role="list">' + d.suspeitos.map((s) => '<div class="row" role="listitem"><div class="row__main"><span class="row__title ellipsis">' + esc(s.produto) + '</span><span class="row__meta">' + metaSpans([esc(s.loja), dBR(s.data), s.mediana ? 'mediana ' + brl(s.mediana) : '']) + '</span></div>' +
+        '<div class="row__trail"><span class="row__amount num">' + brl(s.preco_base) + '</span></div><div class="row__actions">' + btn({ rotulo: 'Validar', icone: 'check', variante: 'secondary', tam: 'sm', attrs: 'data-md="validar" data-id="' + esc(s.id) + '"' }) + btn({ rotulo: 'Rejeitar', icone: 'trash', variante: 'danger-ghost', tam: 'sm', attrs: 'data-md="rejeitar" data-id="' + esc(s.id) + '"' }) + '</div></div>').join('') + '</div></div>' : estadoHtml({ icone: 'checkCircle', titulo: 'Nenhum preço suspeito', compacto: true })) + '</section>' +
+      '<section class="section"><div class="section__head"><h3>Produtos repetidos ' + badge(String(d.duplicados.length), d.duplicados.length ? 'warning' : '') + '</h3></div>' +
+      (d.duplicados.length ? d.duplicados.map((g, gi) => '<div class="card card--flush"><div class="list" role="list">' + g.map((x) => '<div class="row" role="listitem"><div class="row__main"><span class="row__title ellipsis">' + esc(x.nome) + (x.marca ? ' · ' + esc(x.marca) : '') + '</span><span class="row__meta">' + metaSpans([x.gtin ? esc(x.gtin) : 'sem código de barras', x.n_precos + ' preços']) + '</span></div><div class="row__actions">' + btn({ rotulo: 'Manter este', icone: 'check', variante: 'secondary', tam: 'sm', attrs: 'data-mz="' + esc(x.id) + '" data-g="' + gi + '"' }) + '</div></div>').join('') + '</div></div>').join('') : estadoHtml({ icone: 'checkCircle', titulo: 'Nenhum produto repetido', compacto: true })) + '</section>');
+    $$('[data-md]', m.el).forEach((b) => b.onclick = () => run(async () => { await api('admin.preco.decidir', { id: b.dataset.id, decisao: b.dataset.md }); toast(b.dataset.md === 'validar' ? 'Preço validado' : 'Preço rejeitado'); desenha(); }));
+    $$('[data-mz]', m.el).forEach((b) => b.onclick = async () => {
+      const grupo = d.duplicados[+b.dataset.g], fica = b.dataset.mz; if (!await confirmar({ titulo: 'Unir estes produtos?', texto: 'Os outros ' + (grupo.length - 1) + ' passam a ser este. Não dá para desfazer.', ok: 'Unir' })) return;
+      run(async () => { for (const x of grupo) if (x.id !== fica) await api('admin.produto.mesclar', { de: x.id, para: fica }); toast('Produtos unidos'); desenha(); });
+    });
+  }, () => m.close());
+  desenha();
+}
 function abrirAdminPlataforma() {
   const m = modal({ titulo: 'Administração da plataforma', tamanho: 'wide', corpo: Esq.pagina(Esq.cartao() + Esq.lista(5)) });
   const desenha = () => run(async () => {
     const d = await api('admin.painel');
-    m.corpo('<div class="card">' + interruptor({ id: 'ad-cad', rotulo: 'Cadastro aberto', meta: d.cadastro_aberto ? 'Qualquer pessoa pode criar conta' : 'Só quem foi convidado', on: d.cadastro_aberto }) + '</div>' +
+    m.corpo('<div class="cluster">' + btn({ rotulo: 'Moderação do catálogo', icone: 'shield', variante: 'secondary', attrs: 'data-ad-mod' }) + '</div>' + '<div class="card">' + interruptor({ id: 'ad-cad', rotulo: 'Cadastro aberto', meta: d.cadastro_aberto ? 'Qualquer pessoa pode criar conta' : 'Só quem foi convidado', on: d.cadastro_aberto }) + '</div>' +
       '<div class="stats"><div class="stat"><span class="stat__label">Usuários</span><span class="stat__value">' + d.usuarios.length + '</span></div><div class="stat"><span class="stat__label">Espaços</span><span class="stat__value">' + d.total_espacos + '</span></div></div>' +
       campo({ tipo: 'busca', id: 'ad-q', placeholder: 'Buscar usuário', attrs: 'aria-label="Buscar usuário"' }) + '<div class="card card--flush"><div id="ad-l"></div></div>');
     const el = m.el;
+    $('[data-ad-mod]', el).onclick = () => abrirModeracao();
     $('#ad-cad', el).onchange = (e) => { const on = e.target.checked; otimista({ aplicar() {}, reverter() { e.target.checked = !on; }, enviar: () => api('admin.cadastro', { aberto: on }), ok() { d.cadastro_aberto = on; $('#ad-cad', el).closest('.switch').querySelector('.t-muted').textContent = on ? 'Qualquer pessoa pode criar conta' : 'Só quem foi convidado'; toast(on ? 'Cadastro aberto' : 'Cadastro fechado'); } }); };
     const f = () => { const q = val(el, '#ad-q').toLowerCase(); paginar($('#ad-l', el), { itens: d.usuarios.filter((u) => !q || (u.nome + ' ' + u.email).toLowerCase().includes(q)), porPagina: 25,
       item: (u) => '<div class="row" role="listitem">' + avatar(u.nome || u.email) + '<div class="row__main"><span class="row__title">' + esc(u.nome || u.email) + '</span><span class="row__meta">' + metaSpans([esc(u.email), u.n_espacos + (u.n_espacos === 1 ? ' espaço' : ' espaços')]) + '</span></div><div class="row__actions">' + (u.ativo === false ? badge('Inativo', 'danger') : '') + (u.papel_plataforma === 'admin' ? badge('Admin', 'primary', 'shield') : '') + (u.email === S.email ? badge('Você') : btn({ rotulo: 'Opções de ' + u.email, icone: 'dots', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-pp="' + esc(u.email) + '"' })) + '</div></div>',
@@ -2772,7 +2812,7 @@ function demoDashboard(db, mes) {
     agenda: { pagar_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Pagar' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), receber_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Receber' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), atrasados: pend.filter((a) => a.vencimento < hoje).length, proximos: pend.slice().sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6) },
     orcamento: db.categorias.filter((c) => c.tipo === 'Despesa').map((c) => { const r = ls.filter((l) => l.categoria_id === c.id && l.tipo === 'Saída').reduce((s, l) => s + l.valor, 0); return { categoria: c.nome, orcamento: c.orcamento_mensal, realizado: Math.round(r * 100) / 100, pct: c.orcamento_mensal ? Math.round(r / c.orcamento_mensal * 100) : 0 }; }),
     dividas: { total_geral: vazio ? 0 : 25000, observacao: 'Soma das dívidas, faturas de cartão e limite usado.' },
-    estoque: db.estoque.filter((e) => e.status === 'COMPRAR AGORA' || (e.status === 'Acaba em breve' && e.dias <= 3)), alertas_preco: vazio ? [] : [{ nome: 'Café', pct: 12.5 }, { nome: 'Leite', pct: -4.2 }],
+    estoque: db.estoque.filter((e) => e.status === 'COMPRAR AGORA' || (e.status === 'Acaba em breve' && e.dias <= 3)), alertas_preco: vazio ? [] : [{ nome: 'Café', pct: 12.5 }, { nome: 'Leite', pct: -4.2 }], alertas_compartilhados: vazio ? [] : [{ produto_id: 'p1', nome: 'Café', loja: 'Atacadão', preco_base: 79.9, seu_ultimo: 89.9, pct: -11.1, idade_dias: 1 }],
     ultimos: db.lancs.slice().sort((a, b) => b.data.localeCompare(a.data)).slice(0, 5)
   };
 }
@@ -2795,7 +2835,7 @@ function demoApi(action, p) {
       case 'ws.criar': { const e = { id: id(), nome: p.nome || 'Novo espaço', papel: 'admin' }; db.espacos.push(e); return ok(e); }
       case 'ws.sair': db.espacos = db.espacos.filter((e) => e.id !== p.id); return ok({ espacos: db.espacos });
       case 'ws.convidar': db.usuarios.push({ id: p.email, email: p.email, nome: p.nome, papel: p.papel, ativo: 'SIM' }); return ok({ pessoa: { email: p.email, email_enviado: true } });
-      case 'bootstrap': return ok({ me: { email: 'demo@gmail.com', nome: 'Ana Souza', papel: est === 'leitura' ? 'leitura' : (db.espacos.find((e) => e.id === p._ws) || {}).papel || 'admin', plataforma_admin: est !== 'leitura' }, espaco: db.espacos.find((e) => e.id === p._ws) || db.espacos[0], contas: db.contas, categorias: db.categorias, lojas: db.lojas, produtos: db.produtos, unidades: [{ codigo: 'un', nome: 'Unidade' }, { codigo: 'kg', nome: 'Quilo' }, { codigo: 'L', nome: 'Litro' }, { codigo: 'g', nome: 'Grama' }, { codigo: 'ml', nome: 'Mililitro' }], hoje: db.hoje, config: { compartilhar_precos: db.compartilhar !== false } });
+      case 'bootstrap': return ok({ me: { email: 'demo@gmail.com', nome: 'Ana Souza', papel: est === 'leitura' ? 'leitura' : (db.espacos.find((e) => e.id === p._ws) || {}).papel || 'admin', plataforma_admin: est !== 'leitura' }, espaco: db.espacos.find((e) => e.id === p._ws) || db.espacos[0], contas: db.contas, categorias: db.categorias, lojas: db.lojas, produtos: db.produtos, unidades: [{ codigo: 'un', nome: 'Unidade' }, { codigo: 'kg', nome: 'Quilo' }, { codigo: 'L', nome: 'Litro' }, { codigo: 'g', nome: 'Grama' }, { codigo: 'ml', nome: 'Mililitro' }], hoje: db.hoje, config: { compartilhar_precos: db.compartilhar !== false, compartilhamento_aviso: est !== 'aviso' } });
       case 'dashboard': return ok(demoDashboard(db, p.mes || db.mes));
       case 'lancamentos.list': { const q = (p.busca || '').toLowerCase(); return ok(db.lancs.filter((l) => l.data.substr(0, 7) === p.mes && (!q || l.descricao.toLowerCase().includes(q))).sort((a, b) => b.data.localeCompare(a.data))); }
       case 'lancamentos.save': { if (p.id) { const i = db.lancs.findIndex((l) => l.id === p.id); db.lancs[i] = Object.assign({}, p, { versao: (p.versao || 1) + 1 }); return ok(db.lancs[i]); } const n_ = Math.max(1, p.parcelas || 1); for (let k = 0; k < n_; k++) db.lancs.push(Object.assign({}, p, { id: id(), versao: 1, data: k ? addDias(p.data, 30 * k) : p.data, valor: n_ > 1 ? Math.round(p.valor / n_ * 100) / 100 : p.valor, parcela_numero: n_ > 1 ? k + 1 : '', parcela_total: n_ > 1 ? n_ : '' })); return ok({}); }
@@ -2817,7 +2857,13 @@ function demoApi(action, p) {
       case 'cesta.get': return ok(db.cesta.map((c) => Object.assign({}, c, { nome: (db.produtos.find((x) => x.id === c.produto_id) || {}).nome || c.nome })));
       case 'cesta.salvar': db.cesta = p.itens.map((c) => Object.assign({}, c)); return ok({});
       case 'cesta.otimizar': return ok(db.cesta.length ? { economia: 23.4, ranking: [{ loja: 'Atacadão', total: 142.3, completa: true, faltando: [] }, { loja: 'Assaí', total: 151.8, completa: true, faltando: [] }, { loja: 'Pão de Açúcar', total: 165.7, completa: false, faltando: ['Ovo', 'Pão de forma integral com castanhas e grãos'] }] } : { economia: 0, ranking: [] });
-      case 'precos.compartilhados': { const o = {}; (p.produto_ids || []).forEach((id) => { o[id] = [{ loja_global_id: 'g1', loja: 'Atacadão', cidade: 'Belém', data: db.hoje, idade_dias: 0, preco_embalagem: 20.99, tam_embalagem: 0.25, preco_base: 83.96, verificado: true, minha: false }, { loja_global_id: 'g2', loja: 'Supermercado Líder', cidade: 'Belém', data: db.hoje, idade_dias: 3, preco_embalagem: 24.5, tam_embalagem: 0.25, preco_base: 98, verificado: false, minha: false }]; }); return ok({ produtos: o }); }
+      case 'precos.compartilhados': { const o = {}; (p.produto_ids || []).forEach((id) => { o[id] = [{ id: 'o1', loja_global_id: 'g1', loja: 'Atacadão', cidade: 'Belém', data: db.hoje, idade_dias: 0, preco_embalagem: 20.99, tam_embalagem: 0.25, preco_base: 83.96, verificado: true, confirmado: true, confirmacoes: 0, minha: false, meu_voto: '' }, { id: 'o2', loja_global_id: 'g2', loja: 'Supermercado Líder', cidade: 'Belém', data: db.hoje, idade_dias: 3, preco_embalagem: 24.5, tam_embalagem: 0.25, preco_base: 98, verificado: false, confirmado: false, confirmacoes: 0, minha: false, meu_voto: '' }]; }); return ok({ produtos: o }); }
+      case 'compartilhamento.ciente': return ok({ ok: true });
+      case 'preco.confirmar': return ok({ status: 'validado', confirmacoes: 1, discordancias: 0 });
+      case 'reputacao.minha': return ok({ pontos: 7, nivel: 'novo', publicados: 12, validados: 5, faltam_para_confiavel: 13 });
+      case 'admin.preco.decidir': case 'admin.produto.mesclar': case 'admin.reputacao': return ok({});
+      case 'admin.catalogo': return ok({ totais: { produtos: 148, lojas: 23, precos: 1240, validados: 902, suspeitos: 2, bloqueados: 1 }, suspeitos: [{ id: 's1', produto: 'Café torrado 250 g', loja: 'Atacadão', data: db.hoje, preco_embalagem: 99.9, preco_base: 399.6, mediana: 82.4, confirmacoes: 0, discordancias: 0 }, { id: 's2', produto: 'Leite integral 1 L', loja: 'Líder', data: db.hoje, preco_embalagem: 1.2, preco_base: 1.2, mediana: 5.1, confirmacoes: 0, discordancias: 1 }],
+        duplicados: [[{ id: 'g1', nome: 'Arroz Tio João 5 kg', marca: 'Tio João', gtin: '7893500000019', n_precos: 41 }, { id: 'g2', nome: 'Arroz Tio João 5 kg', marca: 'Tio João', gtin: '', n_precos: 6 }]] });
       case 'compartilhamento.set': db.compartilhar = !!p.ativo; return ok({ ativo: !!p.ativo });
       case 'produto.imagens': { const cor = ['#6b8afd', '#34a58f', '#e0a33a', '#c9577a', '#7a6bd6']; const o = {}; (p.ids || []).forEach((id, i) => { if (i % 3 !== 2) o[id] = { h: 'demo' + i, dados: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="' + cor[i % 5] + '"/><rect x="18" y="14" width="28" height="38" rx="5" fill="#fff" opacity=".85"/><rect x="22" y="22" width="20" height="8" rx="2" fill="' + cor[i % 5] + '"/></svg>') }; else o[id] = null; }); return ok({ imagens: o }); }
       case 'produto.imagem.salvar': return ok({ h: 'demo', compartilhada: true });

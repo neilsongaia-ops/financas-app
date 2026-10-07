@@ -2291,7 +2291,7 @@ function abrirVerbaForm(v, done) {
   const sCats = seletor(el, '#vf-cats', { opcoes: opcoesCategorias('Despesa'), valor: v.categorias || [], multi: true, rotulo: 'Categorias', placeholder: 'Escolher categorias' });
   const sConta = seletor(el, '#vf-conta', { opcoes: [{ valor: '', rotulo: 'Qualquer conta ou cartão' }].concat(opcoesContas()), valor: v.conta_id || '', rotulo: 'Conta ou cartão', busca: false });
   const sSobra = seletor(el, '#vf-sobra', { opcoes: [{ valor: 'ZERAR', rotulo: 'Zerar' }, { valor: 'ACUMULAR', rotulo: 'Acumular' }], valor: v.sobra === 'ACUMULAR' ? 'ACUMULAR' : 'ZERAR', rotulo: 'Sobra do mês', busca: false });
-  const per = () => { const mensal = $('#vf-mensal', el).checked; $('#vf-per', el).hidden = mensal; $('#w-sobra', el).hidden = !mensal; };
+  const per = () => { const mensal = $('#vf-mensal', el).checked; $('#vf-fim', el).closest('.field').hidden = mensal; $('#w-sobra', el).hidden = !mensal; };
   $('#vf-mensal', el).onchange = per; per();
   $('[data-vf-ok]', el).onclick = (e) => {
     if (!erroCampo(el, 'vf-nome', val(el, '#vf-nome').trim() ? '' : 'Informe o nome')) return;

@@ -1007,6 +1007,9 @@ function btn(o) {
   return '<button type="button" class="' + cls.join(' ') + '"' + aria + (o.attrs ? ' ' + o.attrs : '') + '>' + (o.icone ? ico(o.icone, o.tam === 'sm' ? 'ico--sm' : '') : '') + (o.so ? '' : '<span class="btn__label">' + esc(o.rotulo) + '</span>') + '</button>';
 }
 
+/** Padrão único de explicação no app: ícone "?" com dica (nunca texto corrido na tela). */
+const ajudaIco = (texto) => btn({ rotulo: texto, icone: 'help', variante: 'ghost', tam: 'sm', so: true });
+
 // ---------- badge e chip
 const badge = (texto, tipo, icone) => '<span class="badge' + (tipo ? ' badge--' + tipo : '') + '">' + (icone ? ico(icone) : '') + esc(texto) + '</span>';
 const chip = (o) => '<button type="button" class="chip" aria-pressed="' + (o.on ? 'true' : 'false') + '"' + (o.attrs ? ' ' + o.attrs : '') + '>' + (o.icone ? ico(o.icone, 'ico--sm') : '') + '<span class="chip__text">' + esc(o.rotulo) + '</span>' + (o.limpar ? '<span class="chip__x" role="button" tabindex="-1" aria-label="Limpar ' + esc(o.rotulo) + '" data-chip-limpar>' + ico('x', 'ico--sm') + '</span>' : (o.caret ? ico('chevDown', 'ico--sm') : '')) + '</button>';
@@ -1043,7 +1046,7 @@ function campo(o) {
   else if (o.tipo === 'busca') ctrl = '<div class="input-wrap">' + ico('search') + '<input class="input input--search" type="search" id="' + id + '" value="' + esc(o.valor || '') + '" placeholder="' + esc(o.placeholder || 'Buscar') + '" ' + (o.attrs || '') + '></div>';
   else ctrl = '<input class="input" id="' + id + '" type="' + (o.tipo || 'text') + '" value="' + esc(o.valor === undefined || o.valor === null ? '' : o.valor) + '"' + (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') + (o.inputmode ? ' inputmode="' + o.inputmode + '"' : '') + ' ' + (o.attrs || '') + '>';
   const lbl = o.tipo === 'seletor' ? '<span class="field__label" id="' + id + '-lbl">' + esc(o.rotulo) + '</span>' : '<label class="field__label" for="' + id + '">' + esc(o.rotulo) + '</label>';
-  const cab = o.ajuda ? '<span class="field__row">' + lbl + btn({ rotulo: o.ajuda, icone: 'help', variante: 'ghost', tam: 'sm', so: true }) + '</span>' : lbl;
+  const cab = o.ajuda ? '<span class="field__row">' + lbl + ajudaIco(o.ajuda) + '</span>' : lbl;
   return '<div class="field' + (o.cheio ? ' field--full' : '') + '"' + (o.wrap ? ' id="' + o.wrap + '"' : '') + (o.oculto ? ' hidden' : '') + '>' + (o.rotulo ? cab : '') + ctrl +
     (o.dica ? '<span class="field__hint">' + esc(o.dica) + '</span>' : '') + '<span class="field__error" id="' + id + '-err" hidden></span></div>';
 }
@@ -1088,7 +1091,7 @@ function marcarAtalhos(inp) { $$('[data-alvo="' + inp.id + '"]').forEach((c) => 
 document.addEventListener('change', (e) => { if (e.target.type === 'date' && e.target.id) marcarAtalhos(e.target); });
 
 // ---------- interruptor, caixa e rádio
-const interruptor = (o) => '<label class="switch"><span class="switch__label"><span>' + esc(o.rotulo) + '</span>' + (o.meta ? '<span class="t-sm t-muted">' + esc(o.meta) + '</span>' : '') + '</span><input type="checkbox" role="switch" class="switch__input" id="' + (o.id || novoId('sw')) + '"' + (o.on ? ' checked' : '') + (o.attrs ? ' ' + o.attrs : '') + '></label>';
+const interruptor = (o) => '<label class="switch"><span class="switch__label">' + (o.ajuda ? '<span class="field__row"><span>' + esc(o.rotulo) + '</span>' + ajudaIco(o.ajuda) + '</span>' : '<span>' + esc(o.rotulo) + '</span>') + (o.meta ? '<span class="t-sm t-muted">' + esc(o.meta) + '</span>' : '') + '</span><input type="checkbox" role="switch" class="switch__input" id="' + (o.id || novoId('sw')) + '"' + (o.on ? ' checked' : '') + (o.attrs ? ' ' + o.attrs : '') + '></label>';
 const caixa = (o) => '<label class="check' + (o.on && o.riscar ? ' is-done' : '') + '"><input type="checkbox" class="check__input"' + (o.on ? ' checked' : '') + (o.attrs ? ' ' + o.attrs : '') + '><span class="check__text">' + esc(o.rotulo) + '</span></label>';
 const radio = (o) => '<label class="' + (o.cartao ? 'choice-card' : 'radio') + '"><input type="radio" class="radio__input" name="' + o.nome + '" value="' + esc(o.valor) + '"' + (o.on ? ' checked' : '') + '><span class="stack stack--sm"><span>' + esc(o.rotulo) + '</span>' + (o.meta ? '<span class="t-sm t-muted">' + esc(o.meta) + '</span>' : '') + '</span></label>';
 
@@ -1799,7 +1802,7 @@ function htmlInicio(d) {
   const graf = '<section class="card" aria-labelledby="i-graf-t"><h2 class="sr-only" id="i-graf-t">Gráficos</h2>' + abas('i-abas', [{ v: 'gastos', rotulo: 'Gastos' }, { v: 'fluxo', rotulo: 'Entradas e saídas' }, { v: 'saldo', rotulo: 'Saldo' }], S.abaInicio || 'gastos') + '<div id="i-graf"></div></section>';
   const prox = d.agenda.proximos.slice(0, 4);
   const pagar = '<section class="card card--flush" aria-labelledby="i-pagar"><div class="card__head"><h2 class="card__title" id="i-pagar">A pagar até o fim do mês</h2><a class="btn btn--ghost btn--sm" href="#agenda">Ver tudo</a></div>' +
-    '<div class="card__body"><div class="stat"><span class="stat__value">' + brl(d.agenda.pagar_ate_fim_do_mes) + '</span>' + (d.agenda.receber_ate_fim_do_mes ? '<span class="stat__meta">A receber ' + brl(d.agenda.receber_ate_fim_do_mes) + '</span>' : '') + '</div></div>' +
+    '<div class="card__body"><div class="stat"><span class="stat__value">' + brl(d.agenda.pagar_ate_fim_do_mes) + '</span>' + (d.agenda.receber_ate_fim_do_mes ? '<span class="stat__meta">A receber ' + brl(d.agenda.receber_ate_fim_do_mes) + '</span>' : '') + (d.agenda.verbas_a_gastar ? '<span class="stat__meta">Verbas ' + brl(d.agenda.verbas_a_gastar) + '</span>' : '') + '</div></div>' +
     (prox.length ? '<div class="list" role="list">' + prox.map((a) => rowAgenda(a, false, d.hoje)).join('') + '</div>' : estadoHtml({ icone: 'checkCircle', titulo: 'Nada pendente', compacto: true })) + '</section>';
   const ult = '<section class="card card--flush" aria-labelledby="i-ult"><div class="card__head"><h2 class="card__title" id="i-ult">Últimos lançamentos</h2><a class="btn btn--ghost btn--sm" href="#lancamentos">Ver todos</a></div>' +
     (d.ultimos.length ? '<div class="list" role="list">' + d.ultimos.slice(0, 5).map(rowLanc).join('') + '</div>' : estadoHtml({ icone: 'lanc', titulo: 'Nenhum lançamento', compacto: true, acao: { rotulo: 'Lançar', icone: 'plus', editar: true, attrs: 'data-acao="novo-lanc"' } })) + '</section>';
@@ -1953,7 +1956,9 @@ function desenharAgenda(main) {
   const grupo = (a) => a.vencimento < hoje ? 'Atrasadas' : a.vencimento <= semana ? 'Próximos 7 dias' : a.vencimento <= fimMes ? 'Até o fim do mês' : 'Depois';
   const ord = lista.slice().sort((a, b) => a.vencimento.localeCompare(b.vencimento));
   const cartoes = aba === 'Pagar' && S.agDash ? S.agDash.cartoes.filter((c) => c.deve > 0) : [];
-  corpo.innerHTML = (cartoes.length ? '<section class="card card--flush" aria-labelledby="ag-fat"><div class="card__head"><h2 class="card__title" id="ag-fat">Faturas de cartão</h2></div><div class="list" role="list">' + cartoes.map((c) => { const f = c.faturas[0]; return '<div class="row" role="listitem">' + lead('card') + '<div class="row__main"><span class="row__title">' + esc(c.nome) + '</span><span class="row__meta">' + (f ? metaSpans(['Vence ' + dBR(f.vence)]) + (f.status === 'Vencida' ? badge('Vencida', 'danger') : badge(f.status)) : '') + '</span></div><div class="row__trail"><span class="row__amount num">' + brl(c.deve) + '</span>' + btn({ rotulo: 'Pagar', variante: 'secondary', tam: 'sm', editar: true, attrs: 'data-acao="fatura-pagar-ag" data-id="' + esc(c.id) + '"' }) + '</div></div>'; }).join('') + '</div></section>' : '') +
+  const verbasAbertas = aba === 'Pagar' && S.agDash ? (S.agDash.verbas || []).filter((v) => verbaViva(v) && v.restante > 0) : [];
+  corpo.innerHTML = (cartoes.length ? '<section class="card card--flush" aria-labelledby="ag-fat"><div class="card__head"><h2 class="card__title" id="ag-fat">Faturas de cartão</h2></div><div class="list" role="list">' + cartoes.map((c) => { const f = c.faturas[0]; return '<div class="row" role="listitem">' + lead('card') + '<div class="row__main"><span class="row__title">' + esc(c.nome) + '</span><span class="row__meta">' + (f ? metaSpans(['Vence ' + dBR(f.vence)].concat(c.verbas_previstas > 0 ? ['Prevista ' + brl(c.prevista)] : [])) + (f.status === 'Vencida' ? badge('Vencida', 'danger') : badge(f.status)) : '') + '</span></div><div class="row__trail"><span class="row__amount num">' + brl(c.deve) + '</span>' + btn({ rotulo: 'Pagar', variante: 'secondary', tam: 'sm', editar: true, attrs: 'data-acao="fatura-pagar-ag" data-id="' + esc(c.id) + '"' }) + '</div></div>'; }).join('') + '</div></section>' : '') +
+    (aba === 'Pagar' && verbasAbertas.length ? '<section class="card card--flush" aria-labelledby="ag-vb"><div class="card__head"><h2 class="card__title" id="ag-vb">Verbas</h2><span class="num">' + brl(verbasAbertas.reduce((s, v) => s + v.restante, 0)) + '</span></div><div class="list" role="list">' + verbasAbertas.map((v) => '<button type="button" class="row row--button" role="listitem" data-acao="verba-abrir" data-id="' + esc(v.id) + '">' + lead('wallet') + '<span class="row__main"><span class="row__title">' + esc(v.nome) + '</span><span class="row__meta">' + metaSpans([periodoVerba(v)].map(esc)) + '</span></span><span class="row__amount num">' + brl(v.restante) + '</span></button>').join('') + '</div></section>' : '') +
     '<section class="card card--flush" aria-label="' + (aba === 'Pagar' ? 'Contas a pagar' : 'Contas a receber') + '"><div id="ag-l"></div></section>';
   paginar($('#ag-l', corpo), { itens: ord, item: (a) => rowAgenda(a, false, hoje), grupo, cabecalho: (g, as) => '<div class="list-group' + (g === 'Atrasadas' ? ' t-neg' : '') + '" role="presentation"><span>' + g + '</span><span class="num">' + brl(as.reduce((s, a) => s + a.valor, 0)) + '</span></div>',
     vazio: estadoHtml({ icone: 'checkCircle', titulo: aba === 'Pagar' ? 'Nada a pagar' : 'Nada a receber', acao: { rotulo: 'Nova conta', icone: 'plus', variante: 'secondary', editar: true, attrs: 'data-acao="ag-nova"' } }) });
@@ -1962,6 +1967,7 @@ ACOES['fatura-pagar-ag'] = (el) => { const c = S.agDash.cartoes.find((x) => x.id
 ACOES['ag-abrir'] = (el) => abrirPagar(S.agIdx[el.dataset.id]);
 ACOES['ag-paga'] = (el) => abrirAgendaPaga(S.agIdx[el.dataset.id]);
 ACOES['ag-nova'] = () => abrirAgenda();
+ACOES['verba-abrir'] = (el) => abrirVerbaDetalhe(el.dataset.id, () => { invalidar(); refresh(); });
 ACOES['ag-gerar'] = (el) => ocupado(el, async () => { const r = await api('agenda.gerarMes', { mes: mesAtual() }); const jaTem = (r.ignorados || []).filter((i) => i.motivo !== 'não gera conta').length; toast(r.criados ? r.criados + (r.criados > 1 ? ' contas criadas' : ' conta criada') : (jaTem ? 'Nada novo: as contas fixas já estão na agenda ou lançadas' : 'Nenhuma conta nova')); invalidar(); refresh(); });
 // pagar com um toque (otimista; "Desfazer" reabre)
 ACOES['ag-rapido'] = (el) => {
@@ -1996,7 +2002,7 @@ TELAS.compras = {
       (rows.length ? '<div class="stats"><div class="stat"><span class="stat__label">Neste mês</span><span class="stat__value">' + brl(doMes.reduce((s, c) => s + (c.total || 0), 0)) + '</span><span class="stat__meta">' + doMes.length + (doMes.length === 1 ? ' compra' : ' compras') + '</span></div></div>' : '') +
       '<section class="card card--flush" aria-label="Compras"><div id="cp-l"></div>' + (rows.length >= S.compLim ? '<div class="card__foot">' + btn({ rotulo: 'Buscar mais antigas', variante: 'ghost', attrs: 'data-acao="compra-mais"' }) + '</div>' : '') + '</section>';
     paginar($('#cp-l', main), { itens: rows, item: (c) => '<div class="row row--button" role="listitem" tabindex="0" data-acao="compra-abrir" data-id="' + esc(c.id) + '">' + lead('store') + '<div class="row__main"><span class="row__title">' + esc(c.loja || 'Compra') + '</span><span class="row__meta">' + metaSpans([dBR(c.data), c.n_itens + (c.n_itens === 1 ? ' item' : ' itens')]) + (c.chave_nfce ? badge('NFC-e', 'primary') : '') + '</span></div><div class="row__trail"><span class="row__amount num">' + brl(c.total) + '</span></div></div>',
-      vazio: estadoHtml({ icone: 'qr', titulo: 'Nenhuma compra', texto: 'Leia o QR Code de uma nota fiscal.', acao: { rotulo: 'Ler nota', icone: 'qr', editar: true, attrs: 'data-acao="compra-scan"' } }) });
+      vazio: estadoHtml({ icone: 'qr', titulo: 'Nenhuma compra', acao: { rotulo: 'Ler nota', icone: 'qr', editar: true, attrs: 'data-acao="compra-scan"' } }) });
   }
 };
 ACOES['compra-mais'] = () => { S.compLim += 60; refresh(); };
@@ -2081,7 +2087,7 @@ TELAS.estoque = {
     main.innerHTML = cabeca('Estoque') + '<div class="chips" id="es-chips" role="group" aria-label="Filtrar"></div><section class="card card--flush" aria-label="Produtos em estoque"><div id="es-l"></div></section>';
     const desenhar = () => {
       $('#es-chips', main).innerHTML = [['todos', 'Todos'], ['comprar', 'Comprar agora'], ['breve', 'Acaba em breve'], ['ok', 'Ok']].map((x) => chip({ rotulo: x[1] + (x[0] !== 'todos' ? ' ' + rows.filter(st[x[0]]).length : ''), on: S.ef === x[0], attrs: 'data-v="' + x[0] + '"' })).join('');
-      paginar($('#es-l', main), { itens: rows.filter(st[S.ef]), item: rowEstoque, vazio: rows.length ? estadoHtml({ icone: 'checkCircle', titulo: 'Nada aqui', compacto: true }) : estadoHtml({ icone: 'estoque', titulo: 'Sem produtos no estoque', texto: 'Registre compras para acompanhar a duração.', acao: { rotulo: 'Ler nota', icone: 'qr', editar: true, attrs: 'data-acao="compra-scan"' } }) });
+      paginar($('#es-l', main), { itens: rows.filter(st[S.ef]), item: rowEstoque, vazio: rows.length ? estadoHtml({ icone: 'checkCircle', titulo: 'Nada aqui', compacto: true }) : estadoHtml({ icone: 'estoque', titulo: 'Sem produtos no estoque', acao: { rotulo: 'Ler nota', icone: 'qr', editar: true, attrs: 'data-acao="compra-scan"' } }) });
     };
     $('#es-chips', main).onclick = (e) => { const c = e.target.closest('.chip'); if (c) { S.ef = c.dataset.v; desenhar(); } };
     desenhar();
@@ -2115,7 +2121,7 @@ TELAS.mais = {
       '<section class="card"><div class="cluster">' + avatar(me.nome || me.email) + '<div class="grow"><p class="row__title">' + esc(me.nome || me.email || '') + '</p><p class="t-sm t-muted ellipsis">' + esc(me.email || '') + '</p></div>' + badge(me.papel === 'admin' ? 'Admin' : me.papel === 'leitura' ? 'Leitura' : 'Editor', 'primary') + '</div></section>' +
       sec('Ir para', NAV.filter((n) => !n.cel).map((n) => '<a class="row row--button" role="listitem" href="#' + n.v + '">' + lead(n.i) + '<span class="row__main"><span class="row__title">' + n.r + '</span></span>' + ico('chevRight') + '</a>').join(''), 'so-celular') +
       sec('Cadastros', Object.keys(ENT).filter((k) => k !== 'Usuarios').map((k) => linha('data-acao="cad-abrir" data-ent="' + k + '"', ENT_ICONE[k], ENT[k].titulo)).join('') + linha('data-acao="verbas"', 'wallet', 'Verbas')) +
-      sec('Espaço', '<div class="needs-admin">' + linha('data-acao="convite"', 'userPlus', 'Pessoas e convites') + '<div class="row" role="listitem">' + interruptor({ id: 'm-comp', rotulo: 'Compartilhar meus preços', meta: 'Só o preço, a loja e a data', on: !(S.boot.config && S.boot.config.compartilhar_precos === false) }) + '</div></div>' + linha('data-acao="contribuicao"', 'chart', 'Minha contribuição') + linha('data-acao="espacos"', 'space', 'Meus espaços', S.boot.espaco ? S.boot.espaco.nome : '')) +
+      sec('Espaço', '<div class="needs-admin">' + linha('data-acao="convite"', 'userPlus', 'Pessoas e convites') + '<div class="row" role="listitem">' + interruptor({ id: 'm-comp', rotulo: 'Compartilhar meus preços', ajuda: 'Só o preço, a loja e a data', on: !(S.boot.config && S.boot.config.compartilhar_precos === false) }) + '</div></div>' + linha('data-acao="contribuicao"', 'chart', 'Minha contribuição') + linha('data-acao="espacos"', 'space', 'Meus espaços', S.boot.espaco ? S.boot.espaco.nome : '')) +
       '<section class="section"><h2 class="t-sm t-muted">Aparência</h2><div class="card">' + segmentado('m-tema', [{ v: 'light', rotulo: 'Claro', icone: 'sun' }, { v: 'dark', rotulo: 'Escuro', icone: 'moon' }, { v: 'auto', rotulo: 'Automático', icone: 'auto' }], Tema.pref(), 'Tema') + '</div></section>' +
       '<div class="needs-plataforma">' + sec('Plataforma', linha('data-acao="admin-plataforma"', 'shield', 'Administração da plataforma')) + '</div>' +
       (S.tk ? '<div class="card card--flush"><button type="button" class="row row--button t-neg" data-acao="sair">' + lead('logout') + '<span class="row__main"><span class="row__title">Sair</span></span></button></div>' : '');
@@ -2152,7 +2158,7 @@ function abrirLancamento(l, defaults) {
       '<div class="field">' + moedaHtml('lf-valor', l.valor, { hero: true, rotulo: 'Valor', autofocus: !editando }) + '<span class="field__error" id="lf-valor-err" hidden></span></div>' +
       '<div class="form-grid">' + campo({ tipo: 'seletor', id: 'lf-cat', rotulo: 'Categoria', wrap: 'w-cat' }) + campo({ tipo: 'seletor', id: 'lf-conta', rotulo: 'Conta' }) + campo({ tipo: 'seletor', id: 'lf-dest', rotulo: 'Para', wrap: 'w-dest' }) +
       campo({ id: 'lf-desc', rotulo: 'Descrição', valor: l.descricao || '', placeholder: 'Ex.: Mercado', attrs: 'autocomplete="off" enterkeyhint="done"' }) + campo({ tipo: 'data', id: 'lf-data', rotulo: 'Data', valor: l.data }) +
-      '<div class="field" id="w-parc"><span class="field__label">Parcelas</span>' + passo('id="lf-parc"', 1) + '</div>' + campo({ tipo: 'seletor', id: 'lf-fat', rotulo: 'Fatura', wrap: 'w-fat' }) + campo({ tipo: 'seletor', id: 'lf-verba', rotulo: 'Verba', wrap: 'w-verba', oculto: true }) + '</div>' +
+      '<div class="field" id="w-parc"><span class="field__label">Parcelas</span>' + passo('id="lf-parc"', 1) + '</div>' + campo({ tipo: 'seletor', id: 'lf-fat', rotulo: 'Fatura', wrap: 'w-fat' }) + campo({ tipo: 'seletor', id: 'lf-verba', rotulo: 'Verba', ajuda: 'Automática: vincula pela categoria e pela data', wrap: 'w-verba', oculto: true }) + '</div>' +
       interruptor({ id: 'lf-st', rotulo: 'Realizado', on: l.status !== 'Previsto' }) +
       '<details class="disclosure disclosure--plain"' + (l.obs ? ' open' : '') + '><summary class="disclosure__sum">Observação' + ico('chevDown') + '</summary><div class="disclosure__body">' + campo({ tipo: 'area', id: 'lf-obs', valor: l.obs || '', attrs: 'aria-label="Observação"' }) + '</div></details>',
     rodape: (editando ? btn({ rotulo: 'Excluir', icone: 'trash', variante: 'danger-ghost', so: true, editar: true, attrs: 'data-l-del' }) + btn({ rotulo: 'Duplicar', icone: 'copy', variante: 'secondary', so: true, editar: true, attrs: 'data-l-dup' }) : '') +
@@ -2212,7 +2218,7 @@ async function verbasLista(forca) { if (forca || !S.verbas) S.verbas = await api
 const periodoVerba = (v) => v.repete === 'MENSAL' ? 'Todo mês' : dBR(v.inicio) + ' a ' + dBR(v.fim);
 const restanteVerba = (v) => v.restante >= 0 ? 'Sobram ' + brl(v.restante) : 'Estourou em ' + brl(-v.restante);
 const verbaViva = (v) => v.ativa !== 'NAO' && !v.encerrada;
-const meterVerba = (v) => '<div class="meter"><div class="meter__head"><span class="meter__label"><span class="ellipsis">' + esc(v.nome) + '</span></span><span class="meter__value">' + brl(v.gasto) + ' de ' + brl(v.valor) + '</span></div>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) +
+const meterVerba = (v) => '<div class="meter"><div class="meter__head"><span class="meter__label"><span class="ellipsis">' + esc(v.nome) + '</span></span><span class="meter__value">' + brl(v.gasto) + ' de ' + brl(v.teto) + '</span></div>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) +
   '<span class="t-sm t-muted">' + esc(restanteVerba(v)) + (v.ritmo ? ' · ' + brl(v.ritmo) + ' por dia' : '') + '</span></div>';
 const badgeVerba = (v) => v.ativa === 'NAO' ? badge('Inativa') : v.encerrada ? badge('Encerrada') : v.estado === 'estourada' ? badge('Estourou', 'danger') : v.estado === 'atencao' ? badge('Atenção', 'warning') : '';
 const rowVerba = (v) => '<button type="button" class="row row--button" role="listitem" data-id="' + esc(v.id) + '">' + lead('wallet') + '<span class="row__main"><span class="row__title">' + esc(v.nome) + '</span><span class="row__meta">' + metaSpans([periodoVerba(v), restanteVerba(v)].map(esc)) + '</span>' + progresso(v.pct, VERBA_TIPO[v.estado], v.nome) + '</span>' + badgeVerba(v) + ico('chevRight') + '</button>';
@@ -2231,6 +2237,7 @@ function abrirVerbaDetalhe(id, done) {
   const abre = () => run(async () => {
     const v = await api('verba.detalhe', { id });
     m.corpo('<div class="stack">' + meterVerba(v) + '<p class="t-sm t-muted">' + esc(periodoVerba(v)) + ' · ' + v.categorias.map((c) => (catPorId(c) || {}).nome).filter(Boolean).map(esc).join(', ') + (v.conta_id ? ' · só ' + esc(contaNome(v.conta_id)) : '') + '</p>' +
+      (v.meses.length > 1 ? divisor('Meses') + '<div class="list" role="list">' + v.meses.map((x) => '<div class="row row--plain" role="listitem"><span class="row__main"><span class="row__title">' + esc(maiusc(mesNome(x.mes))) + '</span><span class="row__meta">' + metaSpans([brl(x.gasto) + ' de ' + brl(x.teto)]) + '</span></span><span class="row__amount num' + (x.restante < 0 ? ' t-neg' : '') + '">' + brl(x.restante) + '</span></div>').join('') + '</div>' : '') +
       divisor('Gastos nesta verba') + (v.lancamentos.length ? '<div class="list" role="list">' + v.lancamentos.map(rowLanc).join('') + '</div>' : estadoHtml({ icone: 'lanc', titulo: 'Nenhum gasto ainda', compacto: true })) + '</div>');
     $('[data-vd-ed]', m.el).onclick = () => { m.close(); abrirVerbaForm(v, done); };
     $('[data-vd-rec]', m.el).onclick = () => run(async () => { const r = await api('verba.recalcular', { id }); toast(r.vinculados ? r.vinculados + ' gasto(s) vinculado(s)' : 'Nenhum gasto novo para vincular'); invalidar(); abre(); if (done) done(); });
@@ -2243,15 +2250,17 @@ function abrirVerbaForm(v, done) {
     corpo: campo({ id: 'vf-nome', rotulo: 'Nome', valor: v.nome || '', placeholder: 'Ex.: Compras do mês', attrs: 'autocomplete="off"', cheio: true }) +
       '<div class="form-grid">' + campo({ tipo: 'moeda', id: 'vf-valor', rotulo: 'Valor separado', valor: v.valor || '' }) + campo({ tipo: 'seletor', id: 'vf-cats', rotulo: 'Categorias' }) + campo({ tipo: 'seletor', id: 'vf-conta', rotulo: 'Conta ou cartão (opcional)' }) +
       campo({ id: 'vf-alerta', rotulo: 'Avisar a partir de (%)', valor: v.alerta_pct || 80, inputmode: 'numeric' }) + '</div>' +
-      interruptor({ id: 'vf-mensal', rotulo: 'Todo mês', on: novo ? true : v.repete === 'MENSAL' }) +
+      interruptor({ id: 'vf-mensal', rotulo: 'Todo mês', ajuda: 'Recomeça a cada mês', on: novo ? true : v.repete === 'MENSAL' }) +
+      campo({ tipo: 'seletor', id: 'vf-sobra', rotulo: 'Sobra do mês', ajuda: 'Zerar: o mês seguinte recomeça com o valor. Acumular: o que sobrou soma ao mês seguinte.', wrap: 'w-sobra' }) +
       '<div class="form-grid" id="vf-per">' + campo({ tipo: 'data', id: 'vf-ini', rotulo: 'Início', valor: v.inicio || hojeISO(), atalhos: false }) + campo({ tipo: 'data', id: 'vf-fim', rotulo: 'Até', valor: v.fim || '', atalhos: false }) + '</div>' +
       (novo ? '' : interruptor({ id: 'vf-ativa', rotulo: 'Ativa', on: v.ativa !== 'NAO' })) +
-      interruptor({ id: 'vf-incl', rotulo: 'Incluir gastos já lançados neste período', on: novo }),
+      interruptor({ id: 'vf-incl', rotulo: 'Incluir gastos já lançados neste período', ajuda: 'Você pode trocar o vínculo em cada lançamento', on: novo }),
     rodape: (novo ? '' : btn({ rotulo: 'Excluir', icone: 'trash', variante: 'danger-ghost', so: true, editar: true, attrs: 'data-vf-del' })) + '<button type="button" class="btn btn--primary needs-edit" data-vf-ok>Salvar</button>' });
   const el = m.el;
   const sCats = seletor(el, '#vf-cats', { opcoes: opcoesCategorias('Despesa'), valor: v.categorias || [], multi: true, rotulo: 'Categorias', placeholder: 'Escolher categorias' });
   const sConta = seletor(el, '#vf-conta', { opcoes: [{ valor: '', rotulo: 'Qualquer conta ou cartão' }].concat(opcoesContas()), valor: v.conta_id || '', rotulo: 'Conta ou cartão', busca: false });
-  const per = () => { $('#vf-per', el).hidden = $('#vf-mensal', el).checked; };
+  const sSobra = seletor(el, '#vf-sobra', { opcoes: [{ valor: 'ZERAR', rotulo: 'Zerar' }, { valor: 'ACUMULAR', rotulo: 'Acumular' }], valor: v.sobra === 'ACUMULAR' ? 'ACUMULAR' : 'ZERAR', rotulo: 'Sobra do mês', busca: false });
+  const per = () => { const mensal = $('#vf-mensal', el).checked; $('#vf-per', el).hidden = mensal; $('#w-sobra', el).hidden = !mensal; };
   $('#vf-mensal', el).onchange = per; per();
   $('[data-vf-ok]', el).onclick = (e) => {
     if (!erroCampo(el, 'vf-nome', val(el, '#vf-nome').trim() ? '' : 'Informe o nome')) return;
@@ -2260,7 +2269,7 @@ function abrirVerbaForm(v, done) {
     const mensal = $('#vf-mensal', el).checked;
     if (!mensal && !erroCampo(el, 'vf-fim', val(el, '#vf-fim') ? '' : 'Informe até quando')) return;
     ocupado(e.currentTarget, async () => {
-      const r = await api('verba.salvar', Object.assign({}, v, { nome: val(el, '#vf-nome').trim(), valor: val(el, '#vf-valor'), categorias: sCats.valor, conta_id: sConta.valor, alerta_pct: num(val(el, '#vf-alerta')), repete: mensal ? 'MENSAL' : 'NAO', inicio: val(el, '#vf-ini'), fim: mensal ? '' : val(el, '#vf-fim'), ativa: !novo && !$('#vf-ativa', el).checked ? 'NAO' : 'SIM', incluir_passados: $('#vf-incl', el).checked, _rid: m.rid }));
+      const r = await api('verba.salvar', Object.assign({}, v, { nome: val(el, '#vf-nome').trim(), valor: val(el, '#vf-valor'), categorias: sCats.valor, conta_id: sConta.valor, alerta_pct: num(val(el, '#vf-alerta')), repete: mensal ? 'MENSAL' : 'NAO', sobra: mensal ? sSobra.valor : 'ZERAR', inicio: val(el, '#vf-ini'), fim: mensal ? '' : val(el, '#vf-fim'), ativa: !novo && !$('#vf-ativa', el).checked ? 'NAO' : 'SIM', incluir_passados: $('#vf-incl', el).checked, _rid: m.rid }));
       m.close(); toast(r.vinculados ? 'Verba salva · ' + r.vinculados + ' gasto(s) vinculado(s)' : 'Verba salva'); invalidar(); if (done) done();
     });
   };
@@ -2635,7 +2644,7 @@ function telaAuth(html) {
 }
 function mostrarLogin(msgInicial) {
   document.title = 'Entrar · Finanças';
-  const a = telaAuth('<form class="stack stack--lg" id="l-p1" novalidate><div class="stack stack--sm"><h1>Entrar</h1><p class="auth__lead">Enviaremos um código para o seu e-mail.</p></div>' +
+  const a = telaAuth('<form class="stack stack--lg" id="l-p1" novalidate><div class="stack stack--sm"><h1>Entrar</h1></div>' +
     campo({ id: 'l-email', rotulo: 'E-mail', tipo: 'email', valor: lembrar('fin_email'), placeholder: 'voce@email.com', attrs: 'autocomplete="email" inputmode="email" required' }) +
     '<button type="submit" class="btn btn--primary btn--block">Enviar código</button></form>' +
     '<form class="stack stack--lg" id="l-p2" hidden novalidate><div class="stack stack--sm"><h1>Digite o código</h1><p class="auth__lead">Enviado para <b id="l-para"></b></p></div>' +
@@ -2676,7 +2685,7 @@ function mostrarLogin(msgInicial) {
 
 function onboarding() {
   document.title = 'Criar espaço · Finanças';
-  const a = telaAuth('<form class="stack stack--lg" id="o-f" novalidate><div class="stack stack--sm"><h1>Crie seu espaço</h1><p class="auth__lead">Só você vê, a menos que convide alguém.</p></div>' +
+  const a = telaAuth('<form class="stack stack--lg" id="o-f" novalidate><div class="stack stack--sm"><h1>Crie seu espaço</h1></div>' +
     campo({ id: 'o-nome', rotulo: 'Nome do espaço', valor: 'Minhas finanças' }) + '<button type="submit" class="btn btn--primary btn--block">Criar espaço</button>' +
     '<button type="button" class="btn btn--ghost btn--block" id="o-conv">Já recebi um convite</button></form>');
   $('#o-f', a).onsubmit = (e) => {
@@ -2799,12 +2808,12 @@ function abrirAdminPlataforma() {
   const m = modal({ titulo: 'Administração da plataforma', tamanho: 'wide', corpo: Esq.pagina(Esq.cartao() + Esq.lista(5)) });
   const desenha = () => run(async () => {
     const d = await api('admin.painel');
-    m.corpo('<div class="cluster">' + btn({ rotulo: 'Moderação do catálogo', icone: 'shield', variante: 'secondary', attrs: 'data-ad-mod' }) + '</div>' + '<div class="card">' + interruptor({ id: 'ad-cad', rotulo: 'Cadastro aberto', meta: d.cadastro_aberto ? 'Qualquer pessoa pode criar conta' : 'Só quem foi convidado', on: d.cadastro_aberto }) + '</div>' +
+    m.corpo('<div class="cluster">' + btn({ rotulo: 'Moderação do catálogo', icone: 'shield', variante: 'secondary', attrs: 'data-ad-mod' }) + '</div>' + '<div class="card">' + interruptor({ id: 'ad-cad', rotulo: 'Cadastro aberto', ajuda: 'Ligado: qualquer pessoa cria conta. Desligado: só quem foi convidado.', on: d.cadastro_aberto }) + '</div>' +
       '<div class="stats"><div class="stat"><span class="stat__label">Usuários</span><span class="stat__value">' + d.usuarios.length + '</span></div><div class="stat"><span class="stat__label">Espaços</span><span class="stat__value">' + d.total_espacos + '</span></div></div>' +
       campo({ tipo: 'busca', id: 'ad-q', placeholder: 'Buscar usuário', attrs: 'aria-label="Buscar usuário"' }) + '<div class="card card--flush"><div id="ad-l"></div></div>');
     const el = m.el;
     $('[data-ad-mod]', el).onclick = () => abrirModeracao();
-    $('#ad-cad', el).onchange = (e) => { const on = e.target.checked; otimista({ aplicar() {}, reverter() { e.target.checked = !on; }, enviar: () => api('admin.cadastro', { aberto: on }), ok() { d.cadastro_aberto = on; $('#ad-cad', el).closest('.switch').querySelector('.t-muted').textContent = on ? 'Qualquer pessoa pode criar conta' : 'Só quem foi convidado'; toast(on ? 'Cadastro aberto' : 'Cadastro fechado'); } }); };
+    $('#ad-cad', el).onchange = (e) => { const on = e.target.checked; otimista({ aplicar() {}, reverter() { e.target.checked = !on; }, enviar: () => api('admin.cadastro', { aberto: on }), ok() { d.cadastro_aberto = on; toast(on ? 'Cadastro aberto' : 'Cadastro fechado'); } }); };
     const f = () => { const q = val(el, '#ad-q').toLowerCase(); paginar($('#ad-l', el), { itens: d.usuarios.filter((u) => !q || (u.nome + ' ' + u.email).toLowerCase().includes(q)), porPagina: 25,
       item: (u) => '<div class="row" role="listitem">' + avatar(u.nome || u.email) + '<div class="row__main"><span class="row__title">' + esc(u.nome || u.email) + '</span><span class="row__meta">' + metaSpans([esc(u.email), u.n_espacos + (u.n_espacos === 1 ? ' espaço' : ' espaços')]) + '</span></div><div class="row__actions">' + (u.ativo === false ? badge('Inativo', 'danger') : '') + (u.papel_plataforma === 'admin' ? badge('Admin', 'primary', 'shield') : '') + (u.email === S.email ? badge('Você') : btn({ rotulo: 'Opções de ' + u.email, icone: 'dots', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-pp="' + esc(u.email) + '"' })) + '</div></div>',
       vazio: estadoHtml({ icone: 'users', titulo: 'Nenhum usuário', compacto: true }) }); };
@@ -2912,7 +2921,7 @@ function demoVerba(db, v) {
   const per = v.repete === 'MENSAL' ? { de: db.mes + '-01', ate: db.mes + '-31' } : { de: v.inicio, ate: v.fim || '9999-12-31' };
   const ls = db.lancs.filter((l) => l.tipo === 'Saída' && v.categorias.includes(l.categoria_id) && (!v.conta_id || l.conta_id === v.conta_id) && l.data >= per.de && l.data <= per.ate);
   const gasto = Math.round(ls.reduce((s, l) => s + l.valor, 0) * 100) / 100, restante = Math.round((v.valor - gasto) * 100) / 100, pct = Math.round(gasto / v.valor * 1000) / 10;
-  return Object.assign({}, v, { periodo: per, gasto, restante, pct, qtd: ls.length, estado: pct > 100 ? 'estourada' : pct >= (v.alerta_pct || 80) ? 'atencao' : 'ok', dias: null, ritmo: null, encerrada: false, lancamentos: ls });
+  return Object.assign({}, v, { periodo: per, teto: v.valor, acumulado: 0, meses: [], gasto, restante, pct, qtd: ls.length, estado: pct > 100 ? 'estourada' : pct >= (v.alerta_pct || 80) ? 'atencao' : 'ok', dias: null, ritmo: null, encerrada: false, lancamentos: ls });
 }
 function demoDashboard(db, mes) {
   const ls = db.lancs.filter((l) => l.data.substr(0, 7) === mes), soma = (t) => ls.filter((l) => l.tipo === t).reduce((s, l) => s + l.valor, 0);
@@ -2925,7 +2934,7 @@ function demoDashboard(db, mes) {
     cartoes: vazio ? [] : [{ id: 'cc_nubank', nome: 'Cartão Nubank', saldo: -1309.25, deve: 1309.25, faturas: [{ vence: mes + '-28', aberto: 1309.25, status: 'Aberta' }] }],
     limite: vazio ? null : { conta: 'Conta Santander', usado: 7546.31, limite: 11680, disponivel: 4133.69, pct: 65, alerta: 10500, acima_alerta: false },
     saldo_liquido: vazio ? 0 : -8244.94, mes_totais: { entradas: ent, saidas: sai, resultado: ent - sai },
-    agenda: { pagar_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Pagar' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), receber_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Receber' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), atrasados: pend.filter((a) => a.vencimento < hoje).length, proximos: pend.slice().sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6) },
+    agenda: { verbas_a_gastar: db.verbas.map((v) => demoVerba(db, v)).reduce((s, v) => s + Math.max(0, v.restante), 0), pagar_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Pagar' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), receber_ate_fim_do_mes: pend.filter((a) => a.direcao === 'Receber' && a.vencimento <= fimMes).reduce((s, a) => s + a.valor, 0), atrasados: pend.filter((a) => a.vencimento < hoje).length, proximos: pend.slice().sort((a, b) => a.vencimento.localeCompare(b.vencimento)).slice(0, 6) },
     verbas: db.verbas.map((v) => demoVerba(db, v)),
     orcamento: db.categorias.filter((c) => c.tipo === 'Despesa').map((c) => { const r = ls.filter((l) => l.categoria_id === c.id && l.tipo === 'Saída').reduce((s, l) => s + l.valor, 0); return { categoria: c.nome, orcamento: c.orcamento_mensal, realizado: Math.round(r * 100) / 100, pct: c.orcamento_mensal ? Math.round(r / c.orcamento_mensal * 100) : 0 }; }),
     dividas: { total_geral: vazio ? 0 : 25000, observacao: 'Soma das dívidas, faturas de cartão e limite usado.' },

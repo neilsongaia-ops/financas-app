@@ -920,11 +920,12 @@ function api(action, payload) {
 
 // ---------- erros
 const tipoErro = (e) => e.codigo || (/^SEM PERMISS/i.test(e.message) || /^ACESSO NEGADO/i.test(e.message) ? 'PERMISSAO' : '');
-const textoErro = (e) => String(e.message || e).replace(/^(SEM PERMISSÃO|ACESSO NEGADO|CONFLITO)\s*:\s*/i, '');
+const textoErro = (e) => String(e.message || e).replace(/^(SEM PERMISSÃO|ACESSO NEGADO|CONFLITO|DESATIVADO)\s*:\s*/i, '');
 function tratarErro(e, repetir) {
   console.error(e);
   const t = tipoErro(e);
   if (t === 'LOGIN') { S.tk = ''; guardar('fin_tk', ''); return mostrarLogin(); }
+  if (t === 'DESATIVADO') { S.tk = ''; guardar('fin_tk', ''); mostrarLogin(); return toast(textoErro(e), { tipo: 'danger' }); }
   if (t === 'SEM_ESPACO') return abrirEspacos();
   if (t === 'CONFLITO') return avisarConflito();
   if (t === 'PERMISSAO') return toast('Seu acesso não permite esta ação.', { tipo: 'danger' });
@@ -2541,8 +2542,9 @@ function abrirConvite() {
   $('[data-c-ok]', el).onclick = (e) => {
     const em = val(el, '#c-email').trim(); if (!erroCampo(el, 'c-email', /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em) ? '' : 'Informe um e-mail válido')) return;
     ocupado(e.currentTarget, async () => {
-      await api('ws.convidar', { email: em, nome: val(el, '#c-nome'), papel: ($('[name="c-papel"]:checked', el) || {}).value || 'editor', _rid: m.rid });
-      m.rid = uuid(); toast('Convite enviado para ' + em); $('#c-email', el).value = ''; $('#c-nome', el).value = ''; pessoas();
+      const r = await api('ws.convidar', { email: em, nome: val(el, '#c-nome'), papel: ($('[name="c-papel"]:checked', el) || {}).value || 'editor', _rid: m.rid });
+      m.rid = uuid(); const enviado = r && r.pessoa && r.pessoa.email_enviado;
+      toast(enviado === false ? 'Pessoa adicionada, mas o e-mail não foi enviado. Avise por mensagem.' : 'Convite enviado para ' + em, enviado === false ? { tipo: 'danger' } : undefined); $('#c-email', el).value = ''; $('#c-nome', el).value = ''; pessoas();
     });
   };
 }
@@ -2557,11 +2559,13 @@ function abrirAdminPlataforma() {
     const el = m.el;
     $('#ad-cad', el).onchange = (e) => { const on = e.target.checked; otimista({ aplicar() {}, reverter() { e.target.checked = !on; }, enviar: () => api('admin.cadastro', { aberto: on }), ok() { d.cadastro_aberto = on; $('#ad-cad', el).closest('.switch').querySelector('.t-muted').textContent = on ? 'Qualquer pessoa pode criar conta' : 'Só quem foi convidado'; toast(on ? 'Cadastro aberto' : 'Cadastro fechado'); } }); };
     const f = () => { const q = val(el, '#ad-q').toLowerCase(); paginar($('#ad-l', el), { itens: d.usuarios.filter((u) => !q || (u.nome + ' ' + u.email).toLowerCase().includes(q)), porPagina: 25,
-      item: (u) => '<div class="row" role="listitem">' + avatar(u.nome || u.email) + '<div class="row__main"><span class="row__title">' + esc(u.nome || u.email) + '</span><span class="row__meta">' + metaSpans([esc(u.email), u.n_espacos + (u.n_espacos === 1 ? ' espaço' : ' espaços')]) + '</span></div><div class="row__actions">' + (u.papel_plataforma === 'admin' ? badge('Admin', 'primary', 'shield') : '') + (u.email === S.email ? badge('Você') : btn({ rotulo: 'Opções de ' + u.email, icone: 'dots', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-pp="' + esc(u.email) + '"' })) + '</div></div>',
+      item: (u) => '<div class="row" role="listitem">' + avatar(u.nome || u.email) + '<div class="row__main"><span class="row__title">' + esc(u.nome || u.email) + '</span><span class="row__meta">' + metaSpans([esc(u.email), u.n_espacos + (u.n_espacos === 1 ? ' espaço' : ' espaços')]) + '</span></div><div class="row__actions">' + (u.ativo === false ? badge('Inativo', 'danger') : '') + (u.papel_plataforma === 'admin' ? badge('Admin', 'primary', 'shield') : '') + (u.email === S.email ? badge('Você') : btn({ rotulo: 'Opções de ' + u.email, icone: 'dots', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-pp="' + esc(u.email) + '"' })) + '</div></div>',
       vazio: estadoHtml({ icone: 'users', titulo: 'Nenhum usuário', compacto: true }) }); };
     f(); $('#ad-q', el).oninput = debounce(f, 150);
     $('#ad-l', el).onclick = (e) => { const b = e.target.closest('[data-pp]'); if (!b) return; const u = d.usuarios.find((x) => x.email === b.dataset.pp), admin = u.papel_plataforma === 'admin';
-      menu(b, [{ rotulo: admin ? 'Remover admin' : 'Tornar admin', icone: 'shield', perigo: admin, fn: async () => { if (!await confirmar({ titulo: admin ? 'Remover admin da plataforma?' : 'Tornar admin da plataforma?', texto: u.email, ok: admin ? 'Remover' : 'Confirmar', perigo: admin })) return; run(async () => { await api('admin.papel', { email: u.email, papel: admin ? 'usuario' : 'admin' }); toast('Papel alterado'); desenha(); }); } }], u.email); };
+      const ativo = u.ativo !== false;
+      menu(b, [{ rotulo: ativo ? 'Desativar usuário' : 'Reativar usuário', icone: ativo ? 'lock' : 'refresh', perigo: ativo, fn: async () => { if (!await confirmar({ titulo: ativo ? 'Desativar este usuário?' : 'Reativar este usuário?', texto: ativo ? u.email + ' não consegue mais entrar nem usar nenhum espaço. Os dados dele ficam guardados.' : u.email + ' volta a poder entrar.', ok: ativo ? 'Desativar' : 'Reativar', perigo: ativo })) return; run(async () => { await api('admin.ativo', { email: u.email, ativo: !ativo }); toast(ativo ? 'Usuário desativado' : 'Usuário reativado'); desenha(); }); } },
+        { rotulo: admin ? 'Remover admin' : 'Tornar admin', icone: 'shield', perigo: admin, fn: async () => { if (!await confirmar({ titulo: admin ? 'Remover admin da plataforma?' : 'Tornar admin da plataforma?', texto: u.email, ok: admin ? 'Remover' : 'Confirmar', perigo: admin })) return; run(async () => { await api('admin.papel', { email: u.email, papel: admin ? 'usuario' : 'admin' }); toast('Papel alterado'); desenha(); }); } }], u.email); };
   }, () => desenha());
   desenha();
 }
@@ -2572,7 +2576,7 @@ async function iniciar() {
   if (ws) {
     S.ws = ws;
     const [l, b, d] = await Promise.allSettled([api('ws.listar'), api('bootstrap'), api('dashboard', { mes: isoLocal(new Date()).substr(0, 7) })]);
-    const login = [l, b, d].find((x) => x.status === 'rejected' && x.reason && x.reason.codigo === 'LOGIN');
+    const login = [l, b, d].find((x) => x.status === 'rejected' && x.reason && (x.reason.codigo === 'LOGIN' || x.reason.codigo === 'DESATIVADO'));
     if (login) throw login.reason;
     if (l.status === 'fulfilled' && b.status === 'fulfilled' && l.value.espacos.some((e) => e.id === ws)) {
       S.espacos = l.value.espacos; S.email = l.value.email; S.boot = b.value; S.mes = b.value.hoje.substr(0, 7); invalidar();
@@ -2589,6 +2593,7 @@ function iniciarApp() {
   S.tk = lembrar('fin_tk'); renderNav(); avisoConexao();
   iniciar().catch((e) => {
     if (e.codigo === 'LOGIN') { S.tk = ''; guardar('fin_tk', ''); return mostrarLogin(); }
+    if (e.codigo === 'DESATIVADO') { S.tk = ''; guardar('fin_tk', ''); mostrarLogin(); return toast(textoErro(e), { tipo: 'danger' }); }
     console.error(e); mostrarApp();
     $('#main').innerHTML = estadoErro(e);
     ACOES.recarregar = () => location.reload();
@@ -2691,7 +2696,7 @@ function demoApi(action, p) {
       case 'ws.listar': return ok({ email: 'demo@gmail.com', espacos: db.espacos });
       case 'ws.criar': { const e = { id: id(), nome: p.nome || 'Novo espaço', papel: 'admin' }; db.espacos.push(e); return ok(e); }
       case 'ws.sair': db.espacos = db.espacos.filter((e) => e.id !== p.id); return ok({ espacos: db.espacos });
-      case 'ws.convidar': db.usuarios.push({ id: p.email, email: p.email, nome: p.nome, papel: p.papel, ativo: 'SIM' }); return ok({});
+      case 'ws.convidar': db.usuarios.push({ id: p.email, email: p.email, nome: p.nome, papel: p.papel, ativo: 'SIM' }); return ok({ pessoa: { email: p.email, email_enviado: true } });
       case 'bootstrap': return ok({ me: { email: 'demo@gmail.com', nome: 'Ana Souza', papel: est === 'leitura' ? 'leitura' : (db.espacos.find((e) => e.id === p._ws) || {}).papel || 'admin', plataforma_admin: est !== 'leitura' }, espaco: db.espacos.find((e) => e.id === p._ws) || db.espacos[0], contas: db.contas, categorias: db.categorias, lojas: db.lojas, produtos: db.produtos, unidades: [{ codigo: 'un', nome: 'Unidade' }, { codigo: 'kg', nome: 'Quilo' }, { codigo: 'L', nome: 'Litro' }, { codigo: 'g', nome: 'Grama' }, { codigo: 'ml', nome: 'Mililitro' }], hoje: db.hoje, config: {} });
       case 'dashboard': return ok(demoDashboard(db, p.mes || db.mes));
       case 'lancamentos.list': { const q = (p.busca || '').toLowerCase(); return ok(db.lancs.filter((l) => l.data.substr(0, 7) === p.mes && (!q || l.descricao.toLowerCase().includes(q))).sort((a, b) => b.data.localeCompare(a.data))); }
@@ -2720,9 +2725,10 @@ function demoApi(action, p) {
       case 'compras.list': return ok(db.compras.slice(0, p.limite || 40));
       case 'compras.detalhe': { const c = db.compras.find((x) => x.id === p.id); return ok({ compra: c, itens: db.itensCompra[p.id] || [] }); }
       case 'compras.excluir': db.compras = db.compras.filter((c) => c.id !== p.id); return ok({});
-      case 'admin.painel': return ok({ cadastro_aberto: db.cadastroAberto, total_espacos: 41, usuarios: [{ email: 'demo@gmail.com', nome: 'Ana Souza', n_espacos: 2, papel_plataforma: 'admin' }].concat(Array.from({ length: 33 }, (_, i) => ({ email: 'pessoa' + (i + 1) + '@email.com', nome: ['Bruno', 'Clara', 'Diego', 'Elisa', 'Fábio', 'Gabi'][i % 6] + ' ' + ['Lima', 'Rocha', 'Prado', 'Melo'][i % 4], n_espacos: 1 + (i % 3), papel_plataforma: i === 4 ? 'admin' : 'usuario' }))) });
+      case 'admin.painel': return ok({ cadastro_aberto: db.cadastroAberto, total_espacos: 41, usuarios: [{ email: 'demo@gmail.com', nome: 'Ana Souza', n_espacos: 2, papel_plataforma: 'admin', ativo: true }].concat(Array.from({ length: 33 }, (_, i) => ({ email: 'pessoa' + (i + 1) + '@email.com', nome: ['Bruno', 'Clara', 'Diego', 'Elisa', 'Fábio', 'Gabi'][i % 6] + ' ' + ['Lima', 'Rocha', 'Prado', 'Melo'][i % 4], n_espacos: 1 + (i % 3), papel_plataforma: i === 4 ? 'admin' : 'usuario', ativo: !(db.inativos || {})['pessoa' + (i + 1) + '@email.com'] }))) });
       case 'admin.cadastro': db.cadastroAberto = !!p.aberto; return ok({});
       case 'admin.papel': return ok({});
+      case 'admin.ativo': { (db.inativos = db.inativos || {})[p.email] = !p.ativo; return ok({ email: p.email, ativo: !!p.ativo }); }
       default: return falha('Ação desconhecida: ' + action);
     }
   })();

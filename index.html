@@ -1876,7 +1876,7 @@ ACOES['fatura-pagar-ag'] = (el) => { const c = S.agDash.cartoes.find((x) => x.id
 ACOES['ag-abrir'] = (el) => abrirPagar(S.agIdx[el.dataset.id]);
 ACOES['ag-paga'] = (el) => abrirAgendaPaga(S.agIdx[el.dataset.id]);
 ACOES['ag-nova'] = () => abrirAgenda();
-ACOES['ag-gerar'] = (el) => ocupado(el, async () => { const r = await api('agenda.gerarMes', { mes: mesAtual() }); toast(r.criados ? r.criados + (r.criados > 1 ? ' contas criadas' : ' conta criada') : 'Nenhuma conta nova'); invalidar(); refresh(); });
+ACOES['ag-gerar'] = (el) => ocupado(el, async () => { const r = await api('agenda.gerarMes', { mes: mesAtual() }); const jaTem = (r.ignorados || []).filter((i) => i.motivo !== 'não gera conta').length; toast(r.criados ? r.criados + (r.criados > 1 ? ' contas criadas' : ' conta criada') : (jaTem ? 'Nada novo: as contas fixas já estão na agenda ou lançadas' : 'Nenhuma conta nova')); invalidar(); refresh(); });
 // pagar com um toque (otimista; "Desfazer" reabre)
 ACOES['ag-rapido'] = (el) => {
   const a = S.agIdx[el.dataset.id]; if (!a) return;
@@ -2132,7 +2132,7 @@ function abrirPagar(a) {
   const rec = a.direcao === 'Receber', cartoes = S.boot.contas.filter((c) => c.tipo === 'cartao');
   const m = modal({
     titulo: a.descricao,
-    corpo: '<div class="stack stack--sm"><span class="t-muted t-sm">' + (rec ? 'A receber' : 'A pagar') + ' · vence ' + dBR(a.vencimento) + (a.vencimento < hojeISO() ? ' ' + badge('Atrasada', 'danger') : '') + '</span>' + moedaHtml('pg-valor', a.valor, { hero: true, rotulo: 'Valor' }) + '</div>' +
+    corpo: '<div class="stack stack--sm"><span class="t-muted t-sm">' + (rec ? 'A receber' : 'A pagar') + ' · vence ' + dBR(a.vencimento) + (a.vencimento < hojeISO() ? ' ' + badge('Atrasada', 'danger') : '') + '</span>' + moedaHtml('pg-valor', a.valor, { hero: true, rotulo: 'Valor' }) + '<p class="t-sm t-muted" id="pg-aviso" role="status" hidden></p></div>' +
       '<div class="form-grid">' + campo({ tipo: 'seletor', id: 'pg-conta', rotulo: rec ? 'Entrou em' : 'Pago com' }) + campo({ tipo: 'data', id: 'pg-data', rotulo: 'Data', valor: hojeISO() }) +
       (rec ? '' : campo({ tipo: 'seletor', id: 'pg-cartao', rotulo: 'Pagamento de fatura', cheio: true, ajuda: 'Escolha o cartão se esta conta for a fatura dele' })) + '</div>' + (a.obs ? '<p class="t-sm t-muted clamp-2" data-expandir>' + esc(a.obs) + '</p>' : ''),
     rodape: btn({ rotulo: 'Editar', icone: 'edit', variante: 'secondary', editar: true, attrs: 'data-p-edit' }) + '<button type="button" class="btn btn--primary needs-edit" data-p-ok>' + (rec ? 'Confirmar recebimento' : 'Confirmar pagamento') + '</button>'
@@ -2141,11 +2141,21 @@ function abrirPagar(a) {
   const sConta = seletor(el, '#pg-conta', { opcoes: opcoesContas((c) => c.tipo !== 'cartao' || !rec), valor: a.conta_id || '', rotulo: rec ? 'Entrou em' : 'Pago com', placeholder: 'Escolher conta' });
   const sCart = rec ? null : seletor(el, '#pg-cartao', { opcoes: [{ valor: '', rotulo: 'Não é fatura' }].concat(cartoes.map((c) => ({ valor: c.id, rotulo: c.nome, icone: 'card' }))), valor: '', rotulo: 'Pagamento de fatura', busca: false });
   $('[data-p-edit]', el).onclick = () => { m.close(); abrirAgenda(a); };
+  const avisoParcial = $('#pg-aviso', el), btnPagar = $('[data-p-ok]', el), rotPagar = btnPagar.textContent;
+  const atualizarParcial = () => {
+    const v = val(el, '#pg-valor'), parcial = v > 0 && v < Number(a.valor) - 0.005;
+    avisoParcial.hidden = !parcial;
+    if (parcial) avisoParcial.textContent = (rec ? 'Recebimento parcial: faltam ' : 'Pagamento parcial: restam ') + brl(Number(a.valor) - v) + ' em aberto.';
+    btnPagar.textContent = parcial ? (rec ? 'Confirmar recebimento parcial' : 'Confirmar pagamento parcial') : rotPagar;
+  };
+  $('#pg-valor .money__input', el).addEventListener('input', () => setTimeout(atualizarParcial, 0));
   $('[data-p-ok]', el).onclick = (e) => {
     if (!erroCampo(el, 'pg-conta', sConta.valor ? '' : 'Escolha a conta')) return;
     ocupado(e.currentTarget, async () => {
-      await api('agenda.pagar', { _rid: m.rid, id: a.id, valor: val(el, '#pg-valor'), conta_id: sConta.valor, data: val(el, '#pg-data'), cartao_id: sCart ? sCart.valor : '' });
-      m.close(); toast(rec ? 'Recebimento registrado' : 'Pagamento registrado', { acao: { rotulo: 'Desfazer', fn: () => run(async () => { await api('agenda.reabrir', { id: a.id }); invalidar(); refresh(); }) } }); invalidar(); refresh();
+      const r = await api('agenda.pagar', { _rid: m.rid, id: a.id, valor: val(el, '#pg-valor'), conta_id: sConta.valor, data: val(el, '#pg-data'), cartao_id: sCart ? sCart.valor : '' });
+      m.close();
+      const desfazer = { acao: { rotulo: 'Desfazer', fn: () => run(async () => { await api('agenda.reabrir', r.parcial ? { id: a.id, lancamento_id: r.lancamento.id } : { id: a.id }); invalidar(); refresh(); }) } };
+      toast(r.parcial ? (rec ? 'Recebimento parcial' : 'Pagamento parcial') + (rec ? ' · faltam ' : ' · restam ') + brl(r.restante) : (rec ? 'Recebimento registrado' : 'Pagamento registrado'), desfazer); invalidar(); refresh();
     });
   };
 }
@@ -2348,7 +2358,7 @@ function abrirAddCesta() {
 const ENT = {
   Contas: { titulo: 'Contas e cartões', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['conta', 'Conta bancária'], ['cartao', 'Cartão de crédito'], ['dinheiro', 'Dinheiro']]], ['limite', 'Limite', 'moeda'], ['saldo_inicial', 'Saldo inicial', 'moeda'], ['dia_fechamento', 'Dia de fechamento', 'dia', null, (o) => o.tipo === 'cartao'], ['dia_vencimento', 'Dia de vencimento', 'dia', null, (o) => o.tipo === 'cartao'], ['ativo', 'Ativa', 'sim']], sub: (r) => [TIPO_CONTA[r.tipo] || r.tipo, r.limite ? 'Limite ' + brl(r.limite) : ''] },
   Categorias: { titulo: 'Categorias e orçamento', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['Despesa', 'Despesa'], ['Receita', 'Receita']]], ['orcamento_mensal', 'Orçamento mensal', 'moeda'], ['ativo', 'Ativa', 'sim']], sub: (r) => [r.tipo, r.orcamento_mensal ? brl(r.orcamento_mensal) + '/mês' : '', r.catalogo_id ? 'Padrão' : ''] },
-  Recorrencias: { titulo: 'Contas fixas e recorrentes', campos: [['nome', 'Nome'], ['direcao', 'Tipo', 'opcoes', [['Pagar', 'A pagar'], ['Receber', 'A receber']]], ['categoria_id', 'Categoria', 'cat'], ['valor', 'Valor', 'moeda'], ['dia', 'Dia do mês', 'dia'], ['conta_id', 'Conta', 'conta'], ['inicio', 'Início', 'data'], ['fim', 'Fim', 'data'], ['ativo', 'Ativa', 'sim']], sub: (r) => [r.direcao === 'Receber' ? 'A receber' : 'A pagar', 'Dia ' + r.dia, brl(r.valor)] },
+  Recorrencias: { titulo: 'Contas fixas e recorrentes', campos: [['nome', 'Nome'], ['direcao', 'Tipo', 'opcoes', [['Pagar', 'A pagar'], ['Receber', 'A receber']]], ['categoria_id', 'Categoria', 'cat'], ['valor', 'Valor', 'moeda'], ['dia', 'Dia do mês', 'dia'], ['conta_id', 'Conta', 'conta'], ['inicio', 'Início', 'data'], ['fim', 'Fim', 'data'], ['ativo', 'Ativa', 'sim'], ['gera_agenda', 'Criar conta no mês', 'sim']], sub: (r) => [r.direcao === 'Receber' ? 'A receber' : 'A pagar', 'Dia ' + r.dia, brl(r.valor)] },
   Dividas: { titulo: 'Dívidas', campos: [['credor', 'Credor'], ['tipo', 'Tipo'], ['saldo', 'Saldo', 'moeda'], ['taxa_am', 'Taxa ao mês (%)', 'numero'], ['parcela_valor', 'Parcela', 'moeda'], ['prazo_restante', 'Parcelas restantes', 'numero'], ['vencimento', 'Vencimento', 'data'], ['ativo', 'Ativa', 'sim'], ['obs', 'Observação', 'area']], sub: (r) => [brl(r.saldo), r.vencimento ? 'Vence ' + dBR(r.vencimento) : ''] },
   Usuarios: { titulo: 'Pessoas do espaço', campos: [['email', 'E-mail'], ['nome', 'Nome'], ['papel', 'Papel', 'opcoes', [['editor', 'Editor'], ['leitura', 'Leitura'], ['admin', 'Admin']]], ['ativo', 'Ativo', 'sim']], sub: (r) => [r.papel, r.ativo === 'NAO' ? 'Inativo' : ''] },
   Lojas: { titulo: 'Lojas', campos: [['nome', 'Nome'], ['cnpj', 'CNPJ', 'texto', 'numeric'], ['cidade', 'Cidade'], ['obs', 'Observação', 'area']], sub: (r) => [r.cidade || '', r.cnpj || ''] },
@@ -2690,7 +2700,7 @@ function demoApi(action, p) {
       case 'agenda.list': return ok(db.ag.filter((a) => a.status === p.status && (!p.mes || (a.data_pagamento || '').substr(0, 7) === p.mes)));
       case 'agenda.save': { if (p.id) { const a = db.ag.find((x) => x.id === p.id); Object.assign(a, p, { versao: (a.versao || 1) + 1 }); } else db.ag.push(Object.assign({}, p, { id: id(), status: 'Pendente', versao: 1 })); return ok({}); }
       case 'agenda.delete': db.ag = db.ag.filter((a) => a.id !== p.id); return ok({});
-      case 'agenda.pagar': { const a = db.ag.find((x) => x.id === p.id); a.status = 'Pago'; a.data_pagamento = p.data; return ok({}); }
+      case 'agenda.pagar': { const a = db.ag.find((x) => x.id === p.id); const v = Number(p.valor) || a.valor; if (v < a.valor - 0.005) { a.valor = Math.round((a.valor - v) * 100) / 100; return ok({ parcial: true, restante: a.valor, lancamento: { id: 'demo-parcial' } }); } a.status = 'Pago'; a.data_pagamento = p.data; return ok({ parcial: false, restante: 0, lancamento: { id: 'demo-pg' } }); }
       case 'agenda.reabrir': { const a = db.ag.find((x) => x.id === p.id); a.status = 'Pendente'; a.data_pagamento = ''; return ok({}); }
       case 'agenda.gerarMes': return ok({ criados: 0 });
       case 'crud.list': return ok({ Contas: db.contas, Categorias: db.categorias, Recorrencias: db.recorrencias, Dividas: db.dividas, Usuarios: db.usuarios, Lojas: db.lojas, Produtos: db.produtos }[p.entity] || []);

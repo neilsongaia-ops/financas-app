@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Finanças</title>
   <meta name="theme-color" content="#3559c3">
-  <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyKOUtH0zC5q4zYlqFmTrqQ2HLFxxDesEnahevZaQ6ynaiR7Fx96ftK1fejMe3Ymua9XA/exec";</script>
+  <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyQPTsc4Uy5WnHUy2whf_dra87FFHaDQalRuiTXPY8JKNHytdpqdad9uoVFnulR8Vh9Ew/exec";</script>
   <script>
 /* Tema: claro, escuro ou automático (segue o sistema). Roda no <head> para não piscar. Preferência em localStorage 'fin_tema'. */
 (function () {
@@ -1620,11 +1620,12 @@ const Grafico = {
 const NAV = [
   { v: 'inicio', i: 'home', r: 'Início', cel: true },
   { v: 'lancamentos', i: 'lanc', r: 'Lançamentos', cel: true },
-  { v: 'contas', i: 'agenda', r: 'Contas', cel: true },
-  { v: 'listas', i: 'list', r: 'Listas', cel: true },
-  { v: 'produtos', i: 'precos', r: 'Produtos' },
-  { v: 'verbas', i: 'wallet', r: 'Verbas' },
+  { v: 'agenda', i: 'agenda', r: 'Contas', cel: true },
   { v: 'projecao', i: 'chart', r: 'Projeção' },
+  { v: 'compras', i: 'compras', r: 'Compras' },
+  { v: 'precos', i: 'precos', r: 'Preços' },
+  { v: 'cesta', i: 'cesta', r: 'Cesta' },
+  { v: 'estoque', i: 'estoque', r: 'Estoque', cel: true },
   { v: 'mais', i: 'mais', r: 'Mais', cel: true }
 ];
 const TELAS = {};
@@ -1924,7 +1925,7 @@ function rowAgenda(a, pago, hoje) {
     '<div class="row__trail"><span class="row__amount num' + (rec ? ' t-pos' : '') + '">' + brl(a.valor) + '</span>' + (pago ? '' : btn({ rotulo: rec ? 'Receber' : 'Pagar', variante: 'secondary', tam: 'sm', editar: true, attrs: 'data-acao="ag-rapido" data-id="' + esc(a.id) + '"' })) + '</div>' +
     (pago ? '<div class="row__actions needs-edit">' + btn({ rotulo: 'Reabrir', icone: 'undo', variante: 'ghost', tam: 'sm', so: true, attrs: 'data-acao="ag-reabrir" data-id="' + esc(a.id) + '"' }) + '</div>' : '') + '</div>';
 }
-TELAS.contas = {
+TELAS.agenda = {
   titulo: 'Contas',
   esq: () => Esq.pagina(Esq.cabeca(2) + '<div class="stats">' + Esq.cartao() + Esq.cartao() + '</div>' + Esq.lista(6)),
   async abrir(main, vivo) {
@@ -1992,7 +1993,7 @@ ACOES['ag-reabrir'] = (el) => {
 
 // ============================================================================ COMPRAS
 S.compLim = 60;
-TELAS.old_compras = {
+TELAS.compras = {
   titulo: 'Compras',
   esq: () => Esq.pagina(Esq.cabeca(2) + Esq.cartao() + Esq.lista(6)),
   async abrir(main, vivo) {
@@ -2012,7 +2013,7 @@ ACOES['compra-abrir'] = (el) => abrirCompra(el.dataset.id);
 
 // ============================================================================ PREÇOS
 S.pf = { q: '', f: 'todos' };
-TELAS.old_precos = {
+TELAS.precos = {
   titulo: 'Preços',
   esq: () => Esq.pagina(Esq.cabeca(2) + Esq.linha('100%', 'hero') + Esq.chips(4) + Esq.lista(8)),
   async abrir(main, vivo) {
@@ -2044,7 +2045,7 @@ ACOES['ean-scan'] = () => abrirScanner({ titulo: 'Código de barras', formatos: 
 // ============================================================================ CESTA
 const chaveMarcados = () => 'fin_cesta_' + S.ws;
 const marcados = () => new Set(lembrar(chaveMarcados()).split(',').filter(Boolean));
-TELAS.old_cesta = {
+TELAS.cesta = {
   titulo: 'Cesta',
   esq: () => Esq.pagina(Esq.cabeca(2) + Esq.lista(6)),
   async abrir(main, vivo) {
@@ -2078,7 +2079,7 @@ ACOES['cesta-comparar'] = (el) => ocupado(el, async () => {
 
 // ============================================================================ ESTOQUE
 S.ef = 'todos';
-TELAS.old_estoque = {
+TELAS.estoque = {
   titulo: 'Estoque',
   esq: () => Esq.pagina(Esq.cabeca(0) + Esq.chips(4) + Esq.lista(7)),
   async abrir(main, vivo) {
@@ -2574,32 +2575,9 @@ function abrirAddCesta() {
 
 // ============================================================================ CADASTROS (crud.list / crud.save / crud.delete)
 // campo: [chave, rótulo, tipo, opções]. tipos: texto, moeda, numero, dia, data, area, opcoes, sim, cat, conta, unidade
-
-TELAS.listas = {
-  titulo: 'Listas',
-  esq: () => Esq.pagina(Esq.cabeca(2) + Esq.lista(6)),
-  async abrir(main, vivo) {
-    main.innerHTML = cabeca('Listas', btn({ rotulo: 'Nova', icone: 'plus', variante: 'primary', attrs: 'data-acao="lista-nova"' }));
-  }
-};
-TELAS.produtos = {
-  titulo: 'Produtos',
-  esq: () => Esq.pagina(Esq.cabeca(2) + Esq.lista(6)),
-  async abrir(main, vivo) {
-    main.innerHTML = cabeca('Produtos', btn({ rotulo: 'Novo', icone: 'plus', variante: 'primary', attrs: 'data-acao="produto-novo"' }));
-  }
-};
-TELAS.verbas = {
-  titulo: 'Verbas',
-  esq: () => Esq.pagina(Esq.cabeca(2) + Esq.lista(6)),
-  async abrir(main, vivo) {
-    main.innerHTML = cabeca('Verbas', btn({ rotulo: 'Nova', icone: 'plus', variante: 'primary', attrs: 'data-acao="verba-nova"' }));
-  }
-};
-
 const ENT = {
   Contas: { titulo: 'Contas e cartões', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['conta', 'Conta bancária'], ['cartao', 'Cartão de crédito'], ['dinheiro', 'Dinheiro']]], ['limite', 'Limite', 'moeda'], ['saldo_inicial', 'Saldo inicial', 'moeda'], ['taxa_juros_am', 'Juros do limite ao mês (%)', 'numero', null, (o) => o.tipo === 'conta'], ['dia_fechamento', 'Dia de fechamento', 'dia', null, (o) => o.tipo === 'cartao'], ['dia_vencimento', 'Dia de vencimento', 'dia', null, (o) => o.tipo === 'cartao'], ['ativo', 'Ativa', 'sim']], sub: (r) => [TIPO_CONTA[r.tipo] || r.tipo, r.limite ? 'Limite ' + brl(r.limite) : ''] },
-  Categorias: { titulo: 'Categorias e orçamento', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['Despesa', 'Despesa'], ['Receita', 'Receita']]], ['ativo', 'Ativa', 'sim']], sub: (r) => [r.tipo, r.orcamento_mensal ? brl(r.orcamento_mensal) + '/mês' : '', r.catalogo_id ? 'Padrão' : ''] },
+  Categorias: { titulo: 'Categorias e orçamento', campos: [['nome', 'Nome'], ['tipo', 'Tipo', 'opcoes', [['Despesa', 'Despesa'], ['Receita', 'Receita']]], ['orcamento_mensal', 'Orçamento mensal', 'moeda'], ['ativo', 'Ativa', 'sim']], sub: (r) => [r.tipo, r.orcamento_mensal ? brl(r.orcamento_mensal) + '/mês' : '', r.catalogo_id ? 'Padrão' : ''] },
   Recorrencias: { titulo: 'Contas fixas e recorrentes', campos: [['nome', 'Nome'], ['direcao', 'Tipo', 'opcoes', [['Pagar', 'A pagar'], ['Receber', 'A receber']]], ['categoria_id', 'Categoria', 'cat'], ['valor', 'Valor', 'moeda'], ['dia', 'Dia do mês', 'dia'], ['conta_id', 'Conta', 'conta'], ['inicio', 'Início', 'data'], ['fim', 'Fim', 'data'], ['ativo', 'Ativa', 'sim'], ['gera_agenda', 'Criar conta no mês', 'sim']], sub: (r) => [r.direcao === 'Receber' ? 'A receber' : 'A pagar', 'Dia ' + r.dia, brl(r.valor)] },
   Dividas: { titulo: 'Dívidas', campos: [['credor', 'Credor'], ['tipo', 'Tipo'], ['saldo', 'Saldo', 'moeda'], ['taxa_am', 'Taxa ao mês (%)', 'numero'], ['parcela_valor', 'Parcela', 'moeda'], ['prazo_restante', 'Parcelas restantes', 'numero'], ['vencimento', 'Vencimento', 'data'], ['ativo', 'Ativa', 'sim'], ['obs', 'Observação', 'area']], sub: (r) => [brl(r.saldo), r.vencimento ? 'Vence ' + dBR(r.vencimento) : ''] },
   Usuarios: { titulo: 'Pessoas do espaço', campos: [['email', 'E-mail'], ['nome', 'Nome'], ['papel', 'Papel', 'opcoes', [['editor', 'Editor'], ['leitura', 'Leitura'], ['admin', 'Admin']]], ['ativo', 'Ativo', 'sim']], sub: (r) => [r.papel, r.ativo === 'NAO' ? 'Inativo' : ''] },
@@ -3077,8 +3055,6 @@ function demoApi(action, p) {
 if (!window.FIN_DOC) iniciarApp();
 
 </script>
-
-// End of v3 redesign implementation.
 
 </body>
 </html>
